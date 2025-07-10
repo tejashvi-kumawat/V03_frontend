@@ -1,0 +1,53 @@
+/* MessageRenderer.css */
+.message-renderer {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  max-width: 100%;
+}
+
+.message-content {
+  margin-bottom: 0.5rem;
+}
+
+.render-item {
+  margin: 0.75rem 0;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--border-color, #e5e7eb);
+  background: var(--bg-secondary, #f9fafb);
+}
+
+.render-error {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #dc2626;
+  padding: 1rem;
+  border-radius: 8px;
+  font-size: 0.875rem;
+}
+
+.render-error pre {
+  background: #fee;
+  padding: 0.5rem;
+  border-radius: 4px;
+  margin-top: 0.5rem;
+  font-size: 0.75rem;
+  overflow-x: auto;
+}
+
+/* Dark theme */
+.dark .render-item {
+  border-color: #374151;
+  background: #1f2937;
+}
+
+.dark .render-error {
+  background: #1f1917;
+  border-color: #7c2d12;
+  color: #f87171;
+}
+
+.dark .render-error pre {
+  background: #2d1b1b;
+} 

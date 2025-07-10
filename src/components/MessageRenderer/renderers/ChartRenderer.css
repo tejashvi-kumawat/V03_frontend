@@ -1,0 +1,228 @@
+/* ChartRenderer.css */
+.chart-renderer {
+  margin: 1rem 0;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--border-color, #e5e7eb);
+  background: var(--bg-secondary, #ffffff);
+}
+
+.chart-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  background: var(--bg-secondary, #f9fafb);
+  border-bottom: 1px solid var(--border-color, #e5e7eb);
+}
+
+.chart-title {
+  font-weight: 600;
+  color: var(--text-primary, #111827);
+}
+
+.chart-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.chart-action-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.375rem 0.75rem;
+  background: var(--bg-primary, #ffffff);
+  border: 1px solid var(--border-color, #d1d5db);
+  border-radius: 6px;
+  color: var(--text-secondary, #6b7280);
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.chart-action-btn:hover {
+  background: var(--bg-hover, #f3f4f6);
+  border-color: var(--border-hover, #9ca3af);
+  color: var(--text-primary, #111827);
+}
+
+.chart-content {
+  padding: 1rem;
+  background: var(--bg-primary, #ffffff);
+}
+
+.chart-fullscreen-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.chart-fullscreen-content {
+  background: var(--bg-primary, #ffffff);
+  border-radius: 8px;
+  max-width: 95vw;
+  max-height: 95vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.chart-fullscreen-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem;
+  border-bottom: 1px solid var(--border-color, #e5e7eb);
+}
+
+.chart-fullscreen-header h3 {
+  margin: 0;
+  color: var(--text-primary, #111827);
+}
+
+.close-fullscreen {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+  color: var(--text-secondary, #6b7280);
+  padding: 0.25rem;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.close-fullscreen:hover {
+  background: var(--bg-hover, #f3f4f6);
+  color: var(--text-primary, #111827);
+}
+
+.chart-fullscreen-body {
+  flex: 1;
+  padding: 1rem;
+  overflow: auto;
+}
+
+/* Error states */
+.chart-renderer.error {
+  border-color: #fecaca;
+}
+
+.chart-renderer.error .chart-header {
+  background: #fef2f2;
+  border-bottom-color: #fecaca;
+}
+
+.error-message {
+  padding: 2rem;
+  text-align: center;
+  color: #dc2626;
+  background: #fef2f2;
+}
+
+.error-details {
+  margin: 0.5rem 1rem;
+  font-size: 0.75rem;
+}
+
+.error-details summary {
+  cursor: pointer;
+  font-weight: 500;
+  color: #dc2626;
+}
+
+.fallback-content {
+  padding: 1rem;
+  background: #fee;
+  border-top: 1px solid #fecaca;
+  max-height: 200px;
+  overflow: auto;
+}
+
+.chart-data {
+  margin: 0;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
+/* Dark theme */
+.dark .chart-renderer {
+  border-color: #374151;
+  background: #1f2937;
+}
+
+.dark .chart-header {
+  background: #111827;
+  border-bottom-color: #374151;
+}
+
+.dark .chart-title {
+  color: #f9fafb;
+}
+
+.dark .chart-action-btn {
+  background: #1f2937;
+  border-color: #4b5563;
+  color: #9ca3af;
+}
+
+.dark .chart-action-btn:hover {
+  background: #374151;
+  border-color: #6b7280;
+  color: #f9fafb;
+}
+
+.dark .chart-content {
+  background: #1f2937;
+}
+
+.dark .chart-fullscreen-content {
+  background: #1f2937;
+}
+
+.dark .chart-fullscreen-header {
+  border-bottom-color: #374151;
+}
+
+.dark .chart-fullscreen-header h3 {
+  color: #f9fafb;
+}
+
+.dark .close-fullscreen {
+  color: #9ca3af;
+}
+
+.dark .close-fullscreen:hover {
+  background: #374151;
+  color: #f9fafb;
+}
+
+.dark .chart-renderer.error {
+  border-color: #7c2d12;
+}
+
+.dark .chart-renderer.error .chart-header {
+  background: #1f1917;
+  border-bottom-color: #7c2d12;
+}
+
+.dark .error-message {
+  background: #1f1917;
+  color: #f87171;
+}
+
+.dark .error-details summary {
+  color: #f87171;
+}
+
+.dark .fallback-content {
+  background: #2d1b1b;
+  border-top-color: #7c2d12;
+} 

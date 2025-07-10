@@ -1,0 +1,158 @@
+/* App Component Specific Styles */
+.app {
+  min-height: 100vh;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Layout Styles */
+.app-layout {
+  display: flex;
+  height: 100vh;
+}
+
+.app-sidebar {
+  width: 260px;
+  min-width: 260px;
+  background-color: var(--gray-100);
+  border-right: 1px solid var(--gray-200);
+  transition: transform 0.3s ease;
+}
+
+.app-sidebar.collapsed {
+  transform: translateX(-100%);
+}
+
+.app-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Page Container */
+.page-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Loading States */
+.loading-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(255, 255, 255, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+.dark .loading-overlay {
+  background-color: rgba(0, 0, 0, 0.9);
+}
+
+/* Error Boundary Styles */
+.error-boundary {
+  padding: var(--spacing-8);
+  text-align: center;
+  background-color: var(--error-50);
+  border: 1px solid var(--error-200);
+  border-radius: var(--radius-lg);
+  margin: var(--spacing-4);
+}
+
+.error-boundary h1 {
+  color: var(--error-600);
+  margin-bottom: var(--spacing-4);
+}
+
+.error-boundary p {
+  color: var(--error-500);
+  margin-bottom: var(--spacing-6);
+}
+
+.error-boundary details {
+  text-align: left;
+  background-color: var(--gray-50);
+  padding: var(--spacing-4);
+  border-radius: var(--radius-md);
+  margin-top: var(--spacing-4);
+}
+
+.error-boundary pre {
+  font-family: var(--font-family-mono);
+  font-size: 0.875rem;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+/* Dark Theme Adjustments */
+.dark .app-sidebar {
+  background-color: var(--gray-100);
+  border-right-color: var(--gray-200);
+}
+
+.dark .error-boundary {
+  background-color: var(--error-900);
+  border-color: var(--error-700);
+}
+
+.dark .error-boundary h1 {
+  color: var(--error-400);
+}
+
+.dark .error-boundary p {
+  color: var(--error-300);
+}
+
+.dark .error-boundary details {
+  background-color: var(--gray-800);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .app-sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100vh;
+    z-index: 1000;
+    box-shadow: var(--shadow-lg);
+  }
+  
+  .app-sidebar.collapsed {
+    transform: translateX(-100%);
+  }
+  
+  .app-main {
+    width: 100%;
+  }
+}
+
+/* Accessibility */
+@media (prefers-reduced-motion: reduce) {
+  .app-sidebar {
+    transition: none;
+  }
+  
+  .fade-in,
+  .slide-in {
+    animation: none;
+  }
+}
+
+/* High Contrast Mode */
+@media (prefers-contrast: high) {
+  .app {
+    border: 2px solid;
+  }
+  
+  .app-sidebar {
+    border-right-width: 2px;
+  }
+} 

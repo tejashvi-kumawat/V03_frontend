@@ -1,0 +1,101 @@
+/* MathRenderer.css */
+.math-renderer {
+  margin: 0.5rem 0;
+  text-align: center;
+}
+
+.math-renderer.empty {
+  padding: 1rem;
+  color: var(--text-secondary, #6b7280);
+  font-style: italic;
+  background: var(--bg-secondary, #f9fafb);
+  border: 1px dashed var(--border-color, #d1d5db);
+  border-radius: 6px;
+}
+
+.math-block {
+  margin: 1.5rem 0;
+  padding: 1rem;
+  background: var(--bg-secondary, #f9fafb);
+  border: 1px solid var(--border-color, #e5e7eb);
+  border-radius: 8px;
+  overflow-x: auto;
+}
+
+.math-inline {
+  display: inline;
+  padding: 0.125rem 0.25rem;
+  background: var(--bg-code, #f3f4f6);
+  border-radius: 3px;
+  margin: 0 0.125rem;
+}
+
+/* Error state */
+.math-renderer.error {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #dc2626;
+  padding: 1rem;
+  border-radius: 8px;
+  text-align: left;
+}
+
+.error-message {
+  font-weight: 500;
+  margin-bottom: 0.5rem;
+}
+
+.error-details {
+  margin-top: 0.5rem;
+  font-size: 0.75rem;
+}
+
+.error-details summary {
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.fallback-content {
+  margin-top: 0.5rem;
+  padding: 0.5rem;
+  background: #fee;
+  border-radius: 4px;
+  font-family: monospace;
+  font-size: 0.875rem;
+  text-align: center;
+}
+
+.raw-latex {
+  background: #fee;
+  padding: 0.25rem 0.5rem;
+  border-radius: 3px;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 0.875rem;
+}
+
+/* Dark theme */
+.dark .math-renderer.empty {
+  background: #1f2937;
+  border-color: #4b5563;
+  color: #9ca3af;
+}
+
+.dark .math-block {
+  background: #1f2937;
+  border-color: #374151;
+}
+
+.dark .math-inline {
+  background: #1f2937;
+}
+
+.dark .math-renderer.error {
+  background: #1f1917;
+  border-color: #7c2d12;
+  color: #f87171;
+}
+
+.dark .fallback-content,
+.dark .raw-latex {
+  background: #2d1b1b;
+} 
