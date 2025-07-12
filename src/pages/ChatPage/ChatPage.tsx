@@ -33,7 +33,8 @@ import {
 } from 'lucide-react'
 import './ChatPage.css'
 
-const DEBUG = typeof import.meta !== 'undefined' && import.meta.env?.VITE_DEBUG === 'true'
+// @ts-ignore - Vite environment variable access
+const DEBUG = import.meta.env?.VITE_DEBUG === 'true'
 
 const ChatPage: React.FC = () => {
   const { user, logout } = useAuth()
@@ -46,6 +47,7 @@ const ChatPage: React.FC = () => {
     isConnected, 
     connectionStatus, 
     isTyping,
+    streamingMessage,
     createConversation,
     selectConversation,
     deleteConversation,
@@ -812,7 +814,29 @@ const ChatPage: React.FC = () => {
                       </div>
                     </div>
                   ))}
-                  {isTyping && (
+                  
+                  {/* Streaming AI Response */}
+                  {streamingMessage && (
+                    <div className="message assistant streaming">
+                      <div className="message-header">
+                        <span className="message-author">
+                          <Bot size={16} />
+                          AI Assistant
+                        </span>
+                        <span className="streaming-indicator">
+                          <span className="streaming-dot"></span>
+                          Generating...
+                        </span>
+                      </div>
+                      <div className="message-content streaming-content">
+                        <MessageRenderer content={streamingMessage.content} />
+                        <span className="cursor-blink">|</span>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Typing Indicator */}
+                  {isTyping && !streamingMessage && (
                     <div className="message assistant typing">
                       <div className="message-header">
                         <span className="message-author">

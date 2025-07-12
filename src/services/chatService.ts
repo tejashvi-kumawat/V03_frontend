@@ -5,6 +5,31 @@ import { apiClient } from './apiClient'
 
 const DEBUG = import.meta.env.VITE_DEBUG === 'true'
 
+// Map frontend QPN modes to backend QCN modes
+const QPN_MODE_MAP: Record<string, string> = {
+  'simple': 'DummyQCN',           // Simple mode -> Dummy QCN for now
+  'tool_enhanced': 'DummyQCN',    // Tool enhanced -> Will use proper QCN when available
+  'rca': 'DummyQCN',             // Root cause analysis -> Future QCN
+  'time_series': 'DummyQCN',     // Time series -> Future QCN  
+  'eda': 'DummyQCN',             // Exploratory data analysis -> Future QCN
+  'custom': 'DummyQCN'           // Custom mode -> Dummy QCN
+}
+
+// Map backend QCN modes back to frontend QPN modes
+const QCN_MODE_MAP: Record<string, string> = {
+  'DummyQCN': 'simple',
+  'SimpleTextQCN': 'simple',
+  'SimpleOnceToolCallQCN': 'tool_enhanced'
+}
+
+function convertToBackendMode(frontendMode: QpnMode | string): string {
+  return QPN_MODE_MAP[frontendMode] || 'DummyQCN'
+}
+
+function convertToFrontendMode(backendMode: string): QpnMode {
+  return (QCN_MODE_MAP[backendMode] || 'simple') as QpnMode
+}
+
 class ChatService {
   /**
    * Get all conversations for the current user
@@ -97,7 +122,7 @@ class ChatService {
 
       const data = {
         title: title || `New Conversation ${new Date().toLocaleString()}`,
-        qpn_mode: qpnMode  // Use snake_case for backend
+        qpn_mode: convertToBackendMode(qpnMode)  // Use snake_case for backend
       }
 
       const response = await apiClient.post('/chat/conversations/', data)
@@ -113,7 +138,7 @@ class ChatService {
           id: conv.id,
           title: conv.title,
           userId: conv.user?.id || '',
-          qpnMode: conv.qpn_mode,
+          qpnMode: convertToFrontendMode(conv.qpn_mode),
           createdAt: new Date(conv.created_at),
           updatedAt: new Date(conv.updated_at),
           lastMessageAt: conv.last_message_at ? new Date(conv.last_message_at) : null,
@@ -148,7 +173,7 @@ class ChatService {
 
       const data: any = {}
       if (updates.title) data.title = updates.title
-      if (updates.qpnMode) data.qpn_mode = updates.qpnMode
+      if (updates.qpnMode) data.qpn_mode = convertToBackendMode(updates.qpnMode)
 
       const response = await apiClient.put(`/chat/conversations/${conversationId}/`, data)
       
@@ -158,7 +183,7 @@ class ChatService {
           id: conv.id,
           title: conv.title,
           userId: conv.user?.id || '',
-          qpnMode: conv.qpn_mode,
+          qpnMode: convertToFrontendMode(conv.qpn_mode),
           createdAt: new Date(conv.created_at),
           updatedAt: new Date(conv.updated_at),
           lastMessageAt: conv.last_message_at ? new Date(conv.last_message_at) : null,
@@ -229,7 +254,7 @@ class ChatService {
           type: msg.message_type,
           timestamp: new Date(msg.created_at),
           editedAt: msg.edited_at ? new Date(msg.edited_at) : undefined,
-          qpnMode: msg.qpn_mode,
+          qpnMode: convertToFrontendMode(msg.qpn_mode),
           processingTime: msg.processing_time,
           metadata: msg.metadata || {},
           attachments: msg.attachments || []
@@ -279,7 +304,7 @@ class ChatService {
           type: msg.message_type,
           timestamp: new Date(msg.created_at),
           editedAt: msg.edited_at ? new Date(msg.edited_at) : undefined,
-          qpnMode: msg.qpn_mode,
+          qpnMode: convertToFrontendMode(msg.qpn_mode),
           processingTime: msg.processing_time,
           metadata: msg.metadata || {},
           attachments: msg.attachments || []
@@ -352,7 +377,7 @@ class ChatService {
 
       const data = {
         query,
-        mode: qpnMode,
+        mode: convertToBackendMode(qpnMode),
         conversationId
       }
 

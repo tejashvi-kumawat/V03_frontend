@@ -1,44 +1,106 @@
 // WebSocket Service for Real-time Chat Communication
 
-import { WebSocketMessage } from '../types/chat'
-import { apiClient } from './apiClient'
+import { EventEmitter } from 'events'
 
 const DEBUG = import.meta.env.VITE_DEBUG === 'true'
 
-// WebSocket Configuration
-const WS_BASE_URL = import.meta.env.VITE_WS_BASE_URL || 'ws://localhost:8000/ws'
+// WebSocket connection configuration
+const WS_BASE_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:8000/ws'
+const HEARTBEAT_INTERVAL = 30000 // 30 seconds
 const RECONNECT_DELAY = 3000 // 3 seconds
 const MAX_RECONNECT_ATTEMPTS = 5
-const HEARTBEAT_INTERVAL = 30000 // 30 seconds
 
-type EventHandler = (data: any) => void
-
-interface QueuedMessage {
-  data: any
-  timestamp: Date
+interface StreamingMessage {
+  messageId: string
+  content: string
+  isComplete: boolean
+  tokens: string[]
 }
 
-class WebSocketService {
+class WebSocketService extends EventEmitter {
   private ws: WebSocket | null = null
   private url: string = ''
-  private isConnecting: boolean = false
   private isConnected: boolean = false
+  private isConnecting: boolean = false
   private reconnectAttempts: number = 0
-  private heartbeatInterval: NodeJS.Timeout | null = null
-  private messageQueue: QueuedMessage[] = []
-  private eventHandlers: Map<string, EventHandler[]> = new Map()
+  private heartbeatInterval: number | null = null
+  private messageQueue: any[] = []
+  private currentStreamingMessage: StreamingMessage | null = null
 
   constructor() {
+    super()
+    
     if (DEBUG) {
       console.log('[DEBUG] WebSocketService initialized')
     }
   }
 
   /**
-   * Get authentication tokens from API client
+   * Get authentication tokens from auth service
    */
-  private getAuthTokens() {
-    return apiClient.getAuthTokens()
+  private getAuthTokens(): any {
+    try {
+      if (DEBUG) {
+        console.log('[DEBUG] WebSocket: Looking for authentication tokens...')
+        console.log('[DEBUG] WebSocket: localStorage keys:', Object.keys(localStorage))
+      }
+      
+      // Method 1: Try to get tokens from individual localStorage keys (authService format)
+      const authToken = localStorage.getItem('auth_token')
+      const refreshToken = localStorage.getItem('refresh_token')
+      
+      if (authToken) {
+        if (DEBUG) {
+          console.log('[DEBUG] WebSocket: Found auth tokens in individual keys')
+        }
+        return {
+          access_token: authToken,
+          refresh_token: refreshToken
+        }
+      }
+      
+      // Method 2: Try to get tokens from auth_tokens JSON object (apiClient format)
+      const authTokensJson = localStorage.getItem('auth_tokens')
+      if (authTokensJson) {
+        try {
+          const authTokensObj = JSON.parse(authTokensJson)
+          if (authTokensObj && (authTokensObj.access_token || authTokensObj.auth_token)) {
+            if (DEBUG) {
+              console.log('[DEBUG] WebSocket: Found auth tokens in JSON object')
+            }
+            return {
+              access_token: authTokensObj.access_token || authTokensObj.auth_token,
+              refresh_token: authTokensObj.refresh_token
+            }
+          }
+        } catch (parseError) {
+          if (DEBUG) {
+            console.error('[DEBUG] WebSocket: Failed to parse auth_tokens JSON:', parseError)
+          }
+        }
+      }
+      
+      // Method 3: Try to get from any token-related keys as fallback
+      const allKeys = Object.keys(localStorage)
+      const tokenKeys = allKeys.filter(key => key.toLowerCase().includes('token'))
+      
+      if (DEBUG) {
+        console.log('[DEBUG] WebSocket: Found token-related keys:', tokenKeys)
+        tokenKeys.forEach(key => {
+          console.log(`[DEBUG] WebSocket: ${key}:`, localStorage.getItem(key)?.substring(0, 20) + '...')
+        })
+      }
+      
+      if (DEBUG) {
+        console.warn('[DEBUG] WebSocket: No authentication tokens found in localStorage')
+      }
+      return null
+    } catch (error) {
+      if (DEBUG) {
+        console.error('[DEBUG] WebSocket: Failed to get auth tokens:', error)
+      }
+      return null
+    }
   }
 
   /**
@@ -94,36 +156,16 @@ class WebSocketService {
         }
 
         this.ws.onmessage = (event) => {
-          try {
-            const data = JSON.parse(event.data)
-            
-            if (DEBUG) {
-              console.log('[DEBUG] WebSocket message received:', data)
-            }
-
-            // Handle ping/pong
-            if (data.type === 'ping') {
-              this.send({ type: 'pong', timestamp: new Date().toISOString() })
-              return
-            }
-
-            // Emit message event
-            this.emit('message', data)
-
-          } catch (error) {
-            if (DEBUG) {
-              console.error('[DEBUG] WebSocket message parse error:', error)
-            }
-          }
+          this.handleMessage(event)
         }
 
         this.ws.onclose = (event) => {
           if (DEBUG) {
-            console.log('[DEBUG] WebSocket closed:', event.code, event.reason)
+            console.log('[DEBUG] WebSocket connection closed:', event.code, event.reason)
           }
 
-          this.isConnecting = false
           this.isConnected = false
+          this.isConnecting = false
           this.stopHeartbeat()
 
           // Emit disconnect event
@@ -131,7 +173,7 @@ class WebSocketService {
 
           // Attempt reconnection if not intentional
           if (event.code !== 1000 && this.reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
-            this.scheduleReconnect()
+            this.attemptReconnect()
           }
         }
 
@@ -141,8 +183,6 @@ class WebSocketService {
           }
 
           this.isConnecting = false
-
-          // Emit error event
           this.emit('error', error)
 
           reject(error)
@@ -150,33 +190,133 @@ class WebSocketService {
 
       } catch (error) {
         this.isConnecting = false
-        if (DEBUG) {
-          console.error('[DEBUG] WebSocket connection failed:', error)
-        }
         reject(error)
       }
     })
   }
 
   /**
-   * Disconnect WebSocket
+   * Handle incoming WebSocket messages with streaming support
    */
-  disconnect(): void {
-    if (DEBUG) {
-      console.log('[DEBUG] WebSocket disconnecting...')
+  private handleMessage(event: MessageEvent): void {
+    try {
+      const data = JSON.parse(event.data)
+      
+      if (DEBUG) {
+        console.log('[DEBUG] WebSocket message received:', data.type)
+      }
+
+      switch (data.type) {
+        case 'connection_established':
+          this.emit('connected', data)
+          break
+          
+        case 'message_received':
+          this.emit('message_received', data)
+          break
+          
+        case 'typing_indicator':
+          this.emit('typing', data)
+          break
+          
+        case 'stream_start':
+          this.handleStreamStart(data)
+          break
+          
+        case 'stream_token':
+          this.handleStreamToken(data)
+          break
+          
+        case 'stream_end':
+          this.handleStreamEnd(data)
+          break
+          
+        case 'message_saved':
+          this.emit('message_saved', data)
+          break
+          
+        case 'error':
+          this.emit('error', data)
+          break
+          
+        case 'pong':
+          // Heartbeat response - connection is alive
+          break
+          
+        default:
+          if (DEBUG) {
+            console.log('[DEBUG] Unknown message type:', data.type)
+          }
+          this.emit('message', data)
+      }
+      
+    } catch (error) {
+      if (DEBUG) {
+        console.error('[DEBUG] Error parsing WebSocket message:', error)
+      }
+      this.emit('error', { error: 'Failed to parse message' })
+    }
+  }
+
+  /**
+   * Handle stream start event
+   */
+  private handleStreamStart(data: any): void {
+    this.currentStreamingMessage = {
+      messageId: Date.now().toString(),
+      content: '',
+      isComplete: false,
+      tokens: []
+    }
+    
+    this.emit('stream_start', {
+      messageId: this.currentStreamingMessage.messageId,
+      message: data.message
+    })
+  }
+
+  /**
+   * Handle incoming stream token
+   */
+  private handleStreamToken(data: any): void {
+    if (!this.currentStreamingMessage) {
+      this.currentStreamingMessage = {
+        messageId: Date.now().toString(),
+        content: '',
+        isComplete: false,
+        tokens: []
+      }
     }
 
-    this.stopHeartbeat()
+    // Add token to the message
+    this.currentStreamingMessage.tokens.push(data.token)
+    this.currentStreamingMessage.content = data.content
 
-    if (this.ws) {
-      this.ws.close(1000, 'Client disconnect')
-      this.ws = null
+    this.emit('stream_token', {
+      messageId: this.currentStreamingMessage.messageId,
+      token: data.token,
+      content: data.content,
+      tokens: this.currentStreamingMessage.tokens
+    })
+  }
+
+  /**
+   * Handle stream end event
+   */
+  private handleStreamEnd(data: any): void {
+    if (this.currentStreamingMessage) {
+      this.currentStreamingMessage.content = data.final_content
+      this.currentStreamingMessage.isComplete = true
+      
+      this.emit('stream_end', {
+        messageId: this.currentStreamingMessage.messageId,
+        content: data.final_content,
+        message: data.message
+      })
+      
+      // Clear current streaming message
+      this.currentStreamingMessage = null
     }
-
-    this.isConnected = false
-    this.isConnecting = false
-    this.reconnectAttempts = 0
-    this.messageQueue = []
   }
 
   /**
@@ -193,7 +333,7 @@ class WebSocketService {
         this.ws.send(JSON.stringify(message))
         
         if (DEBUG) {
-          console.log('[DEBUG] WebSocket message sent:', message)
+          console.log('[DEBUG] WebSocket message sent:', message.type)
         }
       } catch (error) {
         if (DEBUG) {
@@ -214,187 +354,155 @@ class WebSocketService {
   }
 
   /**
-   * Add event listener
-   */
-  on(event: string, handler: EventHandler): void {
-    if (!this.eventHandlers.has(event)) {
-      this.eventHandlers.set(event, [])
-    }
-    this.eventHandlers.get(event)!.push(handler)
-
-    if (DEBUG) {
-      console.log('[DEBUG] WebSocket event handler added:', event)
-    }
-  }
-
-  /**
-   * Remove event listener
-   */
-  off(event: string, handler: EventHandler): void {
-    const handlers = this.eventHandlers.get(event)
-    if (handlers) {
-      const index = handlers.indexOf(handler)
-      if (index !== -1) {
-        handlers.splice(index, 1)
-      }
-    }
-
-    if (DEBUG) {
-      console.log('[DEBUG] WebSocket event handler removed:', event)
-    }
-  }
-
-  /**
-   * Get connection status
-   */
-  getStatus(): {
-    isConnected: boolean
-    isConnecting: boolean
-    reconnectAttempts: number
-    url: string
-  } {
-    return {
-      isConnected: this.isConnected,
-      isConnecting: this.isConnecting,
-      reconnectAttempts: this.reconnectAttempts,
-      url: this.url
-    }
-  }
-
-  /**
    * Send typing indicator
    */
   sendTypingIndicator(isTyping: boolean): void {
     this.send({
-      type: 'typing_indicator',
+      type: isTyping ? 'typing_start' : 'typing_stop',
       is_typing: isTyping
     })
   }
 
   /**
-   * Send ping to keep connection alive
+   * Send chat message
    */
-  ping(): void {
+  sendChatMessage(message: string, attachments: string[] = []): void {
     this.send({
-      type: 'ping'
+      type: 'chat_message',
+      message,
+      attachments
     })
   }
 
   /**
-   * Private: Emit event to handlers
-   */
-  private emit(event: string, data: any): void {
-    const handlers = this.eventHandlers.get(event)
-    if (handlers) {
-      handlers.forEach(handler => {
-        try {
-          handler(data)
-        } catch (error) {
-          if (DEBUG) {
-            console.error('[DEBUG] WebSocket event handler error:', error)
-          }
-        }
-      })
-    }
-  }
-
-  /**
-   * Private: Queue message for sending when connected
+   * Queue message for later sending
    */
   private queueMessage(message: any): void {
-    // Remove old messages (older than 5 minutes)
-    const fiveMinutesAgo = Date.now() - 5 * 60 * 1000
-    this.messageQueue = this.messageQueue.filter(msg => msg.timestamp > fiveMinutesAgo)
-
-    // Add new message
-    this.messageQueue.push({
-      data: message,
-      timestamp: Date.now()
-    })
-
-    // Limit queue size
+    this.messageQueue.push(message)
+    
+    // Limit queue size to prevent memory issues
     if (this.messageQueue.length > 100) {
-      this.messageQueue = this.messageQueue.slice(-100)
+      this.messageQueue.shift()
     }
   }
 
   /**
-   * Private: Process queued messages
+   * Process queued messages
    */
   private processMessageQueue(): void {
-    if (this.messageQueue.length === 0) {
-      return
-    }
-
-    if (DEBUG) {
-      console.log('[DEBUG] Processing', this.messageQueue.length, 'queued messages')
-    }
-
-    const messages = [...this.messageQueue]
-    this.messageQueue = []
-
-    messages.forEach(queuedMessage => {
-      this.send(queuedMessage.data)
-    })
-  }
-
-  /**
-   * Private: Schedule reconnection attempt
-   */
-  private scheduleReconnect(): void {
-    this.reconnectAttempts++
-    
-    const delay = RECONNECT_DELAY * Math.pow(2, this.reconnectAttempts - 1) // Exponential backoff
-    
-    if (DEBUG) {
-      console.log(`[DEBUG] WebSocket scheduling reconnect attempt ${this.reconnectAttempts} in ${delay}ms`)
-    }
-
-    setTimeout(() => {
-      if (!this.isConnected && !this.isConnecting) {
-        const conversationId = this.url.split('/').slice(-2, -1)[0] // Extract conversation ID from URL
-        this.connect(conversationId).catch(error => {
-          if (DEBUG) {
-            console.error('[DEBUG] WebSocket reconnect failed:', error)
-          }
-        })
+    while (this.messageQueue.length > 0 && this.isConnected) {
+      const message = this.messageQueue.shift()
+      if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+        this.ws.send(JSON.stringify(message))
+        
+        if (DEBUG) {
+          console.log('[DEBUG] Queued message sent:', message.type)
+        }
       }
-    }, delay)
+    }
   }
 
   /**
-   * Private: Start heartbeat to keep connection alive
+   * Start heartbeat to keep connection alive
    */
   private startHeartbeat(): void {
-    this.heartbeatInterval = setInterval(() => {
-      if (this.isConnected) {
-        this.ping()
+    this.heartbeatInterval = window.setInterval(() => {
+      if (this.isConnected && this.ws && this.ws.readyState === WebSocket.OPEN) {
+        this.send({ type: 'ping' })
       }
     }, HEARTBEAT_INTERVAL)
-
-    if (DEBUG) {
-      console.log('[DEBUG] WebSocket heartbeat started')
-    }
   }
 
   /**
-   * Private: Stop heartbeat
+   * Stop heartbeat
    */
   private stopHeartbeat(): void {
     if (this.heartbeatInterval) {
       clearInterval(this.heartbeatInterval)
       this.heartbeatInterval = null
     }
+  }
 
+  /**
+   * Attempt reconnection
+   */
+  private attemptReconnect(): void {
+    this.reconnectAttempts++
+    
     if (DEBUG) {
-      console.log('[DEBUG] WebSocket heartbeat stopped')
+      console.log(`[DEBUG] Attempting reconnection ${this.reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS}`)
+    }
+
+    setTimeout(() => {
+      if (!this.isConnected && this.url) {
+        this.reconnect()
+      }
+    }, RECONNECT_DELAY * this.reconnectAttempts)
+  }
+
+  /**
+   * Reconnect to WebSocket
+   */
+  private async reconnect(): Promise<void> {
+    try {
+      // Extract conversation ID from current URL
+      const match = this.url.match(/\/chat\/([^\/\?]+)/)
+      if (match) {
+        const conversationId = match[1]
+        await this.connect(conversationId)
+      }
+    } catch (error) {
+      if (DEBUG) {
+        console.error('[DEBUG] Reconnection failed:', error)
+      }
+      
+      if (this.reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+        this.attemptReconnect()
+      } else {
+        this.emit('reconnect_failed', { error: 'Max reconnection attempts reached' })
+      }
+    }
+  }
+
+  /**
+   * Disconnect WebSocket
+   */
+  disconnect(): void {
+    if (DEBUG) {
+      console.log('[DEBUG] WebSocket disconnecting...')
+    }
+
+    this.stopHeartbeat()
+    
+    if (this.ws) {
+      this.ws.close(1000, 'Client disconnect')
+      this.ws = null
+    }
+    
+    this.isConnected = false
+    this.isConnecting = false
+    this.reconnectAttempts = 0
+    this.messageQueue = []
+    this.currentStreamingMessage = null
+  }
+
+  /**
+   * Get connection status
+   */
+  getStatus(): {
+    connected: boolean
+    connecting: boolean
+    reconnectAttempts: number
+    queuedMessages: number
+  } {
+    return {
+      connected: this.isConnected,
+      connecting: this.isConnecting,
+      reconnectAttempts: this.reconnectAttempts,
+      queuedMessages: this.messageQueue.length
     }
   }
 }
 
 // Export singleton instance
-export const websocketService = new WebSocketService()
-
-if (DEBUG) {
-  console.log('[DEBUG] WebSocketService module loaded')
-} 
+export const websocketService = new WebSocketService() 

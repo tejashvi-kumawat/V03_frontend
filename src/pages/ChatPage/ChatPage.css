@@ -594,14 +594,101 @@
 }
 
 @keyframes typing {
-  0%, 80%, 100% {
+  0%, 20% { transform: scale(1); opacity: 0.4; }
+  50% { transform: scale(1.2); opacity: 1; }
+  80%, 100% { transform: scale(1); opacity: 0.4; }
+}
+
+/* Streaming Message Styles */
+.message.streaming {
+  border-left: 3px solid var(--primary-500);
+  background-color: var(--primary-25);
+  position: relative;
+  overflow: hidden;
+}
+
+.streaming-content {
+  position: relative;
+}
+
+.streaming-indicator {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-1);
+  font-size: 0.75rem;
+  color: var(--primary-600);
+  font-weight: 500;
+}
+
+.streaming-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: var(--primary-500);
+  animation: streaming-pulse 1.5s infinite;
+}
+
+@keyframes streaming-pulse {
+  0%, 100% { 
+    opacity: 0.3; 
     transform: scale(0.8);
-    opacity: 0.5;
   }
-  40% {
-    transform: scale(1);
-    opacity: 1;
+  50% { 
+    opacity: 1; 
+    transform: scale(1.2);
   }
+}
+
+.cursor-blink {
+  display: inline-block;
+  color: var(--primary-600);
+  font-weight: bold;
+  animation: cursor-blink 1.2s infinite;
+  margin-left: 2px;
+}
+
+@keyframes cursor-blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+
+/* Streaming content animation */
+.streaming-content {
+  animation: streaming-fade-in 0.3s ease-in;
+}
+
+@keyframes streaming-fade-in {
+  from { 
+    opacity: 0; 
+    transform: translateY(10px);
+  }
+  to { 
+    opacity: 1; 
+    transform: translateY(0);
+  }
+}
+
+/* Enhanced typing indicator for streaming context */
+.message.streaming .typing-indicator {
+  display: none; /* Hide when streaming actual content */
+}
+
+/* Dark mode streaming styles */
+.dark .message.streaming {
+  border-left-color: var(--primary-400);
+  background-color: var(--primary-900);
+}
+
+.dark .streaming-indicator {
+  color: var(--primary-400);
+}
+
+.dark .streaming-dot {
+  background-color: var(--primary-400);
+}
+
+.dark .cursor-blink {
+  color: var(--primary-400);
 }
 
 /* Sidebar Sections */

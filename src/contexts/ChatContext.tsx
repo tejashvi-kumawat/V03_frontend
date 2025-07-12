@@ -15,6 +15,11 @@ interface ChatContextType {
   // Messages
   messages: Message[]
   isTyping: boolean
+  streamingMessage: {
+    messageId: string
+    content: string
+    isStreaming: boolean
+  } | null
   
   // WebSocket
   isConnected: boolean
@@ -65,6 +70,11 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
   const [isTyping, setIsTyping] = useState(false)
   const [isConnected, setIsConnected] = useState(false)
   const [connectionStatus, setConnectionStatus] = useState<'disconnected' | 'connecting' | 'connected' | 'error'>('disconnected')
+  const [streamingMessage, setStreamingMessage] = useState<{
+    messageId: string
+    content: string
+    isStreaming: boolean
+  } | null>(null)
 
   // Initialize chat data when user logs in
   useEffect(() => {
@@ -75,49 +85,90 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
       setConversations([])
       setCurrentConversation(null)
       setMessages([])
+      setStreamingMessage(null)
       disconnectWebSocket()
     }
   }, [user])
 
   // WebSocket event handlers
   useEffect(() => {
-    const handleMessage = (data: any) => {
+    const handleConnected = (data: any) => {
       if (DEBUG) {
-        console.log('[DEBUG] WebSocket message received:', data)
+        console.log('[DEBUG] WebSocket connected:', data)
       }
+      setIsConnected(true)
+      setConnectionStatus('connected')
+    }
 
-      switch (data.type) {
-        case 'chat_message':
-          const newMessage: Message = {
-            id: Date.now().toString(), // Temporary ID
-            content: data.message,
-            type: data.message_type,
-            timestamp: new Date(data.timestamp),
-            userId: data.user === 'AI Assistant' ? 'assistant' : user?.id || '',
-            conversationId: currentConversation?.id || ''
-          }
-          setMessages(prev => [...prev, newMessage])
-          break
-          
-        case 'typing_indicator':
-          setIsTyping(data.is_typing)
-          break
-          
-        case 'connection_established':
-          setIsConnected(true)
-          setConnectionStatus('connected')
-          break
-          
-        case 'error':
-          console.error('WebSocket error:', data.error)
-          setConnectionStatus('error')
-          break
+    const handleMessageReceived = (data: any) => {
+      if (DEBUG) {
+        console.log('[DEBUG] Message received acknowledgment:', data)
       }
+      // Message was received by server, no UI action needed
+    }
+
+    const handleStreamStart = (data: any) => {
+      if (DEBUG) {
+        console.log('[DEBUG] Stream starting:', data)
+      }
+      
+      setStreamingMessage({
+        messageId: data.messageId,
+        content: '',
+        isStreaming: true
+      })
+      setIsTyping(true)
+    }
+
+    const handleStreamToken = (data: any) => {
+      if (DEBUG) {
+        console.log('[DEBUG] Stream token received:', data.token)
+      }
+      
+      setStreamingMessage(prev => ({
+        messageId: data.messageId,
+        content: data.content,
+        isStreaming: true
+      }))
+    }
+
+    const handleStreamEnd = (data: any) => {
+      if (DEBUG) {
+        console.log('[DEBUG] Stream ended:', data.content.length, 'chars')
+      }
+      
+      // Add the completed AI message to the messages list
+      const aiMessage: Message = {
+        id: Date.now().toString(),
+        content: data.content,
+        type: 'assistant',
+        timestamp: new Date(),
+        userId: 'assistant',
+        conversationId: currentConversation?.id || ''
+      }
+      
+      setMessages(prev => [...prev, aiMessage])
+      setStreamingMessage(null)
+      setIsTyping(false)
+    }
+
+    const handleMessageSaved = (data: any) => {
+      if (DEBUG) {
+        console.log('[DEBUG] Messages saved:', data)
+      }
+      // Messages saved to database, no UI action needed
+    }
+
+    const handleTyping = (data: any) => {
+      if (DEBUG) {
+        console.log('[DEBUG] Typing indicator:', data)
+      }
+      setIsTyping(data.is_typing)
     }
 
     const handleConnect = () => {
       if (DEBUG) {
-        console.log('[DEBUG] WebSocket connected')
+        console.log('[DEBUG] WebSocket connection established')
       }
       setIsConnected(true)
       setConnectionStatus('connected')
@@ -129,6 +180,8 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
       }
       setIsConnected(false)
       setConnectionStatus('disconnected')
+      setStreamingMessage(null)
+      setIsTyping(false)
     }
 
     const handleError = (error: any) => {
@@ -136,20 +189,43 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
         console.error('[DEBUG] WebSocket error:', error)
       }
       setConnectionStatus('error')
+      setStreamingMessage(null)
+      setIsTyping(false)
+    }
+
+    const handleReconnectFailed = (data: any) => {
+      if (DEBUG) {
+        console.error('[DEBUG] WebSocket reconnection failed:', data)
+      }
+      setConnectionStatus('error')
     }
 
     // Set up WebSocket event listeners
-    websocketService.on('message', handleMessage)
+    websocketService.on('connected', handleConnected)
+    websocketService.on('message_received', handleMessageReceived)
+    websocketService.on('stream_start', handleStreamStart)
+    websocketService.on('stream_token', handleStreamToken)
+    websocketService.on('stream_end', handleStreamEnd)
+    websocketService.on('message_saved', handleMessageSaved)
+    websocketService.on('typing', handleTyping)
     websocketService.on('connect', handleConnect)
     websocketService.on('disconnect', handleDisconnect)
     websocketService.on('error', handleError)
+    websocketService.on('reconnect_failed', handleReconnectFailed)
 
     return () => {
       // Clean up event listeners
-      websocketService.off('message', handleMessage)
+      websocketService.off('connected', handleConnected)
+      websocketService.off('message_received', handleMessageReceived)
+      websocketService.off('stream_start', handleStreamStart)
+      websocketService.off('stream_token', handleStreamToken)
+      websocketService.off('stream_end', handleStreamEnd)
+      websocketService.off('message_saved', handleMessageSaved)
+      websocketService.off('typing', handleTyping)
       websocketService.off('connect', handleConnect)
       websocketService.off('disconnect', handleDisconnect)
       websocketService.off('error', handleError)
+      websocketService.off('reconnect_failed', handleReconnectFailed)
     }
   }, [currentConversation, user])
 
@@ -300,16 +376,16 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
       }
       setMessages(prev => [...prev, userMessage])
 
-      // Send via WebSocket if connected
+      // Send via WebSocket if connected, otherwise fallback to HTTP
       if (isConnected) {
-        websocketService.send({
-          type: 'chat_message',
-          message: content,
-          attachments: attachments?.map(f => f.name) || []
-        })
+        websocketService.sendChatMessage(content, attachments?.map(f => f.name) || [])
       } else {
         // Fallback to HTTP API
         await chatService.sendMessage(currentConversation.id, content, attachments)
+        
+        // For HTTP fallback, we don't get streaming, so refresh messages
+        const updatedMessages = await chatService.getMessages(currentConversation.id)
+        setMessages(updatedMessages)
       }
       
       if (DEBUG) {
@@ -390,6 +466,8 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
     websocketService.disconnect()
     setIsConnected(false)
     setConnectionStatus('disconnected')
+    setStreamingMessage(null)
+    setIsTyping(false)
   }
 
   const clearChat = () => {
@@ -400,6 +478,7 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
     setConversations([])
     setCurrentConversation(null)
     setMessages([])
+    setStreamingMessage(null)
     disconnectWebSocket()
   }
 
@@ -433,6 +512,7 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
     loading,
     messages,
     isTyping,
+    streamingMessage,
     isConnected,
     connectionStatus,
     createConversation,
