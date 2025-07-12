@@ -4,9 +4,14 @@ import { useAuth } from '../../contexts/AuthContext'
 import { useChat } from '../../contexts/ChatContext'
 import { useTheme } from '../../contexts/ThemeContext'
 import { QpnMode, MessageSuggestion, ToolOption, ModelOption, DataConnector } from '../../types/chat'
+import { RCAInvestigationState, RCAFormData, RCAProgressUpdate, RCAResult as RCAResultType } from '../../types/rca'
 import MessageRenderer from '../../components/MessageRenderer/MessageRenderer'
 import LoadingSpinner from '../../components/LoadingSpinner/LoadingSpinner'
+import RCAForm from '../../components/RCAForm/RCAForm'
+import RCAProgress from '../../components/RCAProgress/RCAProgress'
+import RCAResult from '../../components/RCAResult/RCAResult'
 import { apiClient } from '../../services/apiClient'
+import { rcaService } from '../../services/rcaService'
 import { 
   Send, 
   Paperclip, 
@@ -29,7 +34,8 @@ import {
   BarChart3,
   TrendingUp,
   Microscope,
-  Folder
+  Folder,
+  AlertTriangle
 } from 'lucide-react'
 import './ChatPage.css'
 
@@ -85,6 +91,14 @@ const ChatPage: React.FC = () => {
   // Message editing state
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null)
   const [editingMessageContent, setEditingMessageContent] = useState('')
+
+  // RCA State
+  const [rcaInvestigationState, setRcaInvestigationState] = useState<RCAInvestigationState>(RCAInvestigationState.IDLE)
+  const [rcaRequest, setRcaRequest] = useState<any>(null)
+  const [rcaProgress, setRcaProgress] = useState<RCAProgressUpdate | null>(null)
+  const [rcaResult, setRcaResult] = useState<RCAResultType | null>(null)
+  const [rcaError, setRcaError] = useState<string | null>(null)
+  const [showRcaForm, setShowRcaForm] = useState(false)
 
   // Refs
   const messageInputRef = useRef<HTMLTextAreaElement>(null)
@@ -319,6 +333,111 @@ const ChatPage: React.FC = () => {
     }
   }
 
+  // RCA Functions
+  const startRCAInvestigation = async (problemDescription: string) => {
+    try {
+      setRcaInvestigationState(RCAInvestigationState.CREATING_REQUEST)
+      setRcaError(null)
+
+      // Create RCA request
+      const requestData: RCAFormData = {
+        problem_description: problemDescription,
+        data_sources: ['demo_data'],
+        context_info: '',
+        priority: 'medium',
+        client_id: 'demo',
+        metadata: {}
+      }
+
+      const request = await rcaService.createRequest(requestData)
+      setRcaRequest(request)
+
+      // Start investigation
+      setRcaInvestigationState(RCAInvestigationState.STARTING_INVESTIGATION)
+      const startedRequest = await rcaService.startInvestigation(request.id)
+      setRcaRequest(startedRequest)
+
+      // Poll for progress
+      setRcaInvestigationState(RCAInvestigationState.INVESTIGATING)
+      const result = await rcaService.pollInvestigationProgress(
+        request.id,
+        (progress) => {
+          setRcaProgress(progress)
+        }
+      )
+
+      setRcaResult(result)
+      setRcaInvestigationState(RCAInvestigationState.COMPLETED)
+      setRcaProgress(null)
+
+      if (DEBUG) {
+        console.log('[DEBUG] RCA investigation completed:', result)
+      }
+    } catch (error) {
+      console.error('[DEBUG] RCA investigation failed:', error)
+      setRcaError(error instanceof Error ? error.message : 'RCA investigation failed')
+      setRcaInvestigationState(RCAInvestigationState.FAILED)
+    }
+  }
+
+  const handleRCAFormSubmit = async (formData: RCAFormData) => {
+    try {
+      setRcaInvestigationState(RCAInvestigationState.CREATING_REQUEST)
+      setRcaError(null)
+      setShowRcaForm(false)
+
+      const request = await rcaService.createRequest(formData)
+      if (!request || !request.id) {
+        console.error('[DEBUG] RCA createRequest returned invalid response:', request)
+        setRcaError('Failed to create RCA request. Please try again.')
+        setRcaInvestigationState(RCAInvestigationState.FAILED)
+        return
+      }
+      setRcaRequest(request)
+
+      // Start investigation
+      setRcaInvestigationState(RCAInvestigationState.STARTING_INVESTIGATION)
+      const startedRequest = await rcaService.startInvestigation(request.id)
+      if (!startedRequest || !startedRequest.id) {
+        console.error('[DEBUG] RCA startInvestigation returned invalid response:', startedRequest)
+        setRcaError('Failed to start RCA investigation. Please try again.')
+        setRcaInvestigationState(RCAInvestigationState.FAILED)
+        return
+      }
+      setRcaRequest(startedRequest)
+
+      // Poll for progress
+      setRcaInvestigationState(RCAInvestigationState.INVESTIGATING)
+      const result = await rcaService.pollInvestigationProgress(
+        request.id,
+        (progress) => {
+          setRcaProgress(progress)
+        }
+      )
+
+      setRcaResult(result)
+      setRcaInvestigationState(RCAInvestigationState.COMPLETED)
+      setRcaProgress(null)
+
+      if (DEBUG) {
+        console.log('[DEBUG] RCA investigation completed:', result)
+      }
+    } catch (error) {
+      console.error('[DEBUG] RCA investigation failed:', error)
+      setRcaError(error instanceof Error ? error.message : 'RCA investigation failed')
+      setRcaInvestigationState(RCAInvestigationState.FAILED)
+    }
+  }
+
+  const handleRCACancel = () => {
+    setRcaInvestigationState(RCAInvestigationState.IDLE)
+    setRcaRequest(null)
+    setRcaProgress(null)
+    setRcaResult(null)
+    setRcaError(null)
+    setShowRcaForm(false)
+  }
+
   const handleSendMessage = async () => {
     if (!messageText.trim() && selectedFiles.length === 0) return
 
@@ -340,7 +459,15 @@ const ChatPage: React.FC = () => {
         await new Promise(resolve => setTimeout(resolve, 100))
       }
 
-      await sendMessage(messageText, selectedFiles)
+      // Check if RCA mode is enabled
+      if (selectedQpnMode === QpnMode.RCA) {
+        // Start RCA investigation
+        await startRCAInvestigation(messageText)
+      } else {
+        // Normal chat message
+        await sendMessage(messageText, selectedFiles)
+      }
+
       setMessageText('')
       setSelectedFiles([])
       if (fileInputRef.current) {
@@ -932,6 +1059,22 @@ const ChatPage: React.FC = () => {
                   </button>
                 ))}
               </div>
+              
+              {/* RCA Form Button */}
+              {selectedQpnMode === QpnMode.RCA && (
+                <div className="rca-form-section">
+                  <button
+                    onClick={() => setShowRcaForm(true)}
+                    className="rca-form-btn"
+                  >
+                    <Microscope size={16} />
+                    Configure RCA Investigation
+                  </button>
+                  <p className="rca-form-note">
+                    Set up detailed parameters for your root cause analysis investigation
+                  </p>
+                </div>
+              )}
             </div>
           )}
 
@@ -1277,6 +1420,83 @@ const ChatPage: React.FC = () => {
                     {connectingSheets ? 'Loading...' : 'Download & Load Data'}
                   </button>
                 </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* RCA Form Modal */}
+      {showRcaForm && (
+        <div className="modal-overlay" onClick={() => setShowRcaForm(false)}>
+          <div className="modal-content rca-modal" onClick={(e) => e.stopPropagation()}>
+            <RCAForm
+              onSubmit={handleRCAFormSubmit}
+              onCancel={() => setShowRcaForm(false)}
+              isLoading={rcaInvestigationState === RCAInvestigationState.CREATING_REQUEST}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* RCA Progress Modal */}
+      {rcaInvestigationState === RCAInvestigationState.INVESTIGATING && rcaProgress && (
+        <div className="modal-overlay">
+          <div className="modal-content rca-modal" onClick={(e) => e.stopPropagation()}>
+            <RCAProgress
+              progress={rcaProgress}
+              onCancel={handleRCACancel}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* RCA Result Modal */}
+      {rcaInvestigationState === RCAInvestigationState.COMPLETED && rcaResult && (
+        <div className="modal-overlay" onClick={handleRCACancel}>
+          <div className="modal-content rca-modal" onClick={(e) => e.stopPropagation()}>
+            <RCAResult
+              result={rcaResult}
+              onExport={(format) => {
+                console.log('Export RCA result as:', format)
+                // TODO: Implement export functionality
+              }}
+              onShare={() => {
+                console.log('Share RCA result')
+                // TODO: Implement share functionality
+              }}
+            />
+            <div className="modal-actions">
+              <button onClick={handleRCACancel} className="btn btn-secondary">
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* RCA Error Modal */}
+      {rcaInvestigationState === RCAInvestigationState.FAILED && rcaError && (
+        <div className="modal-overlay" onClick={handleRCACancel}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>RCA Investigation Failed</h3>
+              <button onClick={handleRCACancel} className="modal-close-btn">
+                <X size={20} />
+              </button>
+            </div>
+            <div className="modal-body">
+              <div className="error-message">
+                <AlertTriangle size={20} />
+                <p>{rcaError}</p>
+              </div>
+              <div className="modal-actions">
+                <button onClick={handleRCACancel} className="btn btn-secondary">
+                  Close
+                </button>
+                <button onClick={() => setShowRcaForm(true)} className="btn btn-primary">
+                  Try Again
+                </button>
               </div>
             </div>
           </div>
