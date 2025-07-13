@@ -7,10 +7,13 @@ import {
   Plus, 
   Trash2,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Bell,
+  BellOff
 } from 'lucide-react'
 import { RCAFormData, RCAClientConfig } from '../../types/rca'
 import { rcaService } from '../../services/rcaService'
+import { browserNotificationService, showPermissionDialog, testNotification, refreshNotificationStatus } from '../../utils/browserNotifications'
 import './RCAForm.css'
 
 interface RCAFormProps {
@@ -325,6 +328,69 @@ const RCAForm: React.FC<RCAFormProps> = ({
               </div>
             </div>
           )}
+        </div>
+
+        {/* Notification Settings */}
+        <div className="notification-section">
+          <div className="notification-header">
+            <Bell size={16} />
+            <span>Notifications</span>
+          </div>
+          <div className="notification-content">
+            <p className="notification-description">
+              Get notified when your RCA analysis is complete, even if you're not actively using the app.
+            </p>
+            <div className="notification-status">
+              {browserNotificationService.isNotificationSupported() ? (
+                browserNotificationService.canSendNotifications() ? (
+                  <div className="notification-granted">
+                    <Bell size={16} />
+                    <span>Notifications enabled</span>
+                  </div>
+                ) : (
+                  <div className="notification-request">
+                    <BellOff size={16} />
+                    <span>Notifications disabled</span>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const granted = await showPermissionDialog()
+                        if (granted) {
+                          // Refresh status and force re-render to update status
+                          refreshNotificationStatus()
+                          setFormData(prev => ({ ...prev }))
+                        }
+                      }}
+                      className="btn btn-secondary btn-sm"
+                      disabled={isLoading}
+                    >
+                      Enable Notifications
+                    </button>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        console.log('[DEBUG] Testing notification from RCA form...')
+                        await testNotification()
+                        // Refresh status after test
+                        refreshNotificationStatus()
+                        setFormData(prev => ({ ...prev }))
+                      }}
+                      className="btn btn-secondary btn-sm"
+                      disabled={isLoading}
+                      style={{ fontSize: '0.7rem', padding: '4px 8px' }}
+                    >
+                      Test
+                    </button>
+                  </div>
+                )
+              ) : (
+                <div className="notification-unsupported">
+                  <BellOff size={16} />
+                  <span>Notifications not supported in this browser</span>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
 
         {/* Form Actions */}

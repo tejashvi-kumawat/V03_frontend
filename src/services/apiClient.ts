@@ -6,7 +6,8 @@ const DEBUG = (import.meta as any).env?.VITE_DEBUG === 'true'
 
 // API Configuration
 const API_BASE_URL = (import.meta as any).env?.VITE_API_BASE_URL || '/api'
-const REQUEST_TIMEOUT = 12000000 // 2 minutes for long-running operations like RCA
+const BACKEND_URL = (import.meta as any).env?.VITE_BACKEND_URL || 'http://localhost:8000'
+const REQUEST_TIMEOUT = parseInt((import.meta as any).env?.VITE_API_TIMEOUT || '12000000') // 2 minutes for long-running operations like RCA
 
 interface ApiResponse<T = any> {
   data: T

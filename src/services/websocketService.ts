@@ -6,9 +6,10 @@ const DEBUG = import.meta.env.VITE_DEBUG === 'true'
 
 // WebSocket connection configuration
 const WS_BASE_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:8000/ws'
-const HEARTBEAT_INTERVAL = 30000 // 30 seconds
-const RECONNECT_DELAY = 3000 // 3 seconds
-const MAX_RECONNECT_ATTEMPTS = 5
+const WS_TIMEOUT = parseInt(import.meta.env.VITE_WS_TIMEOUT || '30000')
+const HEARTBEAT_INTERVAL = parseInt(import.meta.env.VITE_WS_HEARTBEAT_INTERVAL || '30000') // 30 seconds
+const RECONNECT_DELAY = parseInt(import.meta.env.VITE_WS_RECONNECT_DELAY || '3000') // 3 seconds
+const MAX_RECONNECT_ATTEMPTS = parseInt(import.meta.env.VITE_WS_MAX_RECONNECT_ATTEMPTS || '5')
 
 interface StreamingMessage {
   messageId: string

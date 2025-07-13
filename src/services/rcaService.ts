@@ -2,7 +2,9 @@
 
 import { apiClient } from './apiClient'
 
-const DEBUG = true // Set to true for debugging
+const DEBUG = (import.meta as any).env?.VITE_DEBUG === 'true'
+const RCA_MAX_ITERATIONS = parseInt((import.meta as any).env?.VITE_RCA_MAX_ITERATIONS || '10')
+const RCA_TIMEOUT = parseInt((import.meta as any).env?.VITE_RCA_TIMEOUT || '300000')
 
 export interface RCARequest {
   id: string
@@ -547,7 +549,7 @@ class RCAService {
       // Root Cause
       yPosition = addSectionHeader('Root Cause', yPosition)
       if (result.root_cause) {
-        yPosition = addWrappedText(result.root_cause, yPosition)
+        yPosition = addWrappedText(result.root_cause || '', yPosition)
         yPosition = addWrappedText(`Confidence: ${result.confidence_percentage || 'N/A'}`, yPosition, 10)
       } else {
         yPosition = addWrappedText('No definitive root cause identified', yPosition)
@@ -564,7 +566,7 @@ class RCAService {
       if (result.findings && result.findings.length > 0) {
         yPosition = addSectionHeader(`Key Findings (${result.findings.length})`, yPosition)
         for (let i = 0; i < result.findings.length; i++) {
-          const finding = result.findings[i]
+          const finding = result.findings[i] || ''
           yPosition = addWrappedText(`${i + 1}. ${finding || 'No description'}`, yPosition, 10)
           
           // Check if we need a new page
@@ -586,7 +588,7 @@ class RCAService {
       if (result.recommendations && result.recommendations.length > 0) {
         yPosition = addSectionHeader(`Recommendations (${result.recommendations.length})`, yPosition)
         for (let i = 0; i < result.recommendations.length; i++) {
-          const recommendation = result.recommendations[i]
+          const recommendation = result.recommendations[i] || ''
           yPosition = addWrappedText(`${i + 1}. ${recommendation || 'No description'}`, yPosition, 10)
           
           // Check if we need a new page
@@ -627,7 +629,7 @@ class RCAService {
           yPosition = addWrappedText(`Confidence: ${((hypothesis.confidence || 0) * 100).toFixed(1)}%`, yPosition, 10)
           
           if (hypothesis.rationale) {
-            yPosition = addWrappedText(`Rationale: ${hypothesis.rationale}`, yPosition, 10)
+            yPosition = addWrappedText(`Rationale: ${hypothesis.rationale || ''}`, yPosition, 10)
           }
           
           yPosition += 5

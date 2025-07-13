@@ -160,6 +160,68 @@
   font-size: 0.75rem;
 }
 
+/* Notification Section */
+.notification-section {
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--bg-primary);
+}
+
+.notification-header {
+  padding: 12px 16px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.notification-content {
+  padding: 16px;
+}
+
+.notification-description {
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  margin-bottom: 12px;
+  line-height: 1.5;
+}
+
+.notification-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.notification-granted {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--success-color, #10b981);
+  font-weight: 500;
+  font-size: 0.875rem;
+}
+
+.notification-request {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+
+.notification-unsupported {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  font-style: italic;
+}
+
 /* Form Actions */
 .form-actions {
   display: flex;

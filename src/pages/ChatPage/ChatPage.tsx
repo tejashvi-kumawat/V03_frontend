@@ -13,6 +13,7 @@ import RCAResult from '../../components/RCAResult/RCAResult'
 import { apiClient } from '../../services/apiClient'
 import { rcaService } from '../../services/rcaService'
 import { showSuccess, showError } from '../../utils/notifications'
+import { browserNotificationService, sendRCANotification, showPermissionDialog, testNotification, refreshNotificationStatus } from '../../utils/browserNotifications'
 import { 
   Send, 
   Paperclip, 
@@ -36,7 +37,8 @@ import {
   TrendingUp,
   Microscope,
   Folder,
-  AlertTriangle
+  AlertTriangle,
+  Bell
 } from 'lucide-react'
 import './ChatPage.css'
 
@@ -100,6 +102,7 @@ const ChatPage: React.FC = () => {
   const [rcaResult, setRcaResult] = useState<RCAResultType | null>(null)
   const [rcaError, setRcaError] = useState<string | null>(null)
   const [showRcaForm, setShowRcaForm] = useState(false)
+  const [showNotificationBanner, setShowNotificationBanner] = useState(false)
 
   // Refs
   const messageInputRef = useRef<HTMLTextAreaElement>(null)
@@ -145,6 +148,35 @@ const ChatPage: React.FC = () => {
   useEffect(() => {
     loadDataSources()
     loadMcpTools()
+    
+      // Check notification permission and show banner if needed
+  console.log('[DEBUG] Checking notification status on mount:', {
+    isSupported: browserNotificationService.isNotificationSupported(),
+    canSend: browserNotificationService.canSendNotifications(),
+    permission: browserNotificationService.getPermissionStatus()
+  })
+  
+  if (browserNotificationService.isNotificationSupported() && 
+      !browserNotificationService.canSendNotifications() &&
+      browserNotificationService.getPermissionStatus() !== 'denied') {
+    setShowNotificationBanner(true)
+  }
+    
+    // Set up notification click listener
+    const handleNotificationClick = (event: CustomEvent) => {
+      const { rcaRequestId, problemDescription } = event.detail
+      
+      // Find the RCA request and show the result
+      if (rcaRequestId) {
+        handleRCANotificationClick(rcaRequestId, problemDescription)
+      }
+    }
+
+    window.addEventListener('rcaNotificationClick', handleNotificationClick as EventListener)
+    
+    return () => {
+      window.removeEventListener('rcaNotificationClick', handleNotificationClick as EventListener)
+    }
   }, [])
 
   const loadDataSources = async () => {
@@ -426,6 +458,22 @@ const ChatPage: React.FC = () => {
     try {
       setRcaInvestigationState(RCAInvestigationState.CREATING_REQUEST)
       setRcaError(null)
+
+      // Request notification permission if not already granted
+      console.log('[DEBUG] Checking notification permission before RCA...')
+      if (!browserNotificationService.canSendNotifications()) {
+        console.log('[DEBUG] Permission not granted, requesting...')
+        const permissionGranted = await showPermissionDialog()
+        if (!permissionGranted) {
+          console.log('[DEBUG] Notification permission not granted, continuing without notifications')
+        } else {
+          console.log('[DEBUG] Notification permission granted!')
+          refreshNotificationStatus()
+        }
+      } else {
+        console.log('[DEBUG] Notification permission already granted')
+      }
+
       setShowRcaForm(false)
 
       // Add user message to conversation
@@ -489,6 +537,32 @@ const ChatPage: React.FC = () => {
       setRcaResult(result as any)
       setRcaInvestigationState(RCAInvestigationState.COMPLETED)
       setRcaProgress(null)
+
+      // Send browser notification if permission granted
+      console.log('[DEBUG] Notification permission check:', {
+        isSupported: browserNotificationService.isNotificationSupported(),
+        canSend: browserNotificationService.canSendNotifications(),
+        permission: browserNotificationService.getPermissionStatus()
+      })
+      
+      let notificationSent = false
+      if (browserNotificationService.canSendNotifications()) {
+        console.log('[DEBUG] Sending RCA notification for request:', request.id)
+        try {
+          await sendRCANotification(request.id, formData.problem_description)
+          console.log('[DEBUG] RCA notification sent successfully')
+          notificationSent = true
+        } catch (error) {
+          console.error('[DEBUG] Failed to send RCA notification:', error)
+        }
+      } else {
+        console.log('[DEBUG] Cannot send notifications - permission not granted')
+      }
+      
+      // Show in-app notification if browser notification failed
+      if (!notificationSent) {
+        showSuccess(`RCA analysis completed! Check the results above.`)
+      }
 
       // Add investigation results to conversation
       if (currentConversation) {
@@ -555,6 +629,21 @@ const ChatPage: React.FC = () => {
     setRcaResult(null)
     setRcaError(null)
     setShowRcaForm(false)
+  }
+
+  const handleRCANotificationClick = async (rcaRequestId: string, problemDescription: string) => {
+    try {
+      // Fetch the RCA result
+      const result = await rcaService.getRCAResult(rcaRequestId)
+      setRcaResult(result as any)
+      setRcaInvestigationState(RCAInvestigationState.COMPLETED)
+      
+      // Show success message
+      showSuccess(`RCA analysis for "${problemDescription.substring(0, 50)}..." loaded successfully`)
+    } catch (error) {
+      console.error('Failed to load RCA result from notification:', error)
+      showError('Failed to load RCA analysis result')
+    }
   }
 
   const handleSendMessage = async () => {
@@ -998,6 +1087,47 @@ const ChatPage: React.FC = () => {
             </button>
           </div>
         </div>
+
+        {/* Notification Permission Banner */}
+        {showNotificationBanner && (
+          <div className="notification-banner">
+            <div className="notification-banner-content">
+              <Bell size={16} />
+              <span>Enable notifications to get updates when your RCA analysis is complete</span>
+              <div className="notification-banner-actions">
+                <button
+                  onClick={async () => {
+                    const granted = await showPermissionDialog()
+                    if (granted) {
+                      refreshNotificationStatus()
+                      setShowNotificationBanner(false)
+                    }
+                  }}
+                  className="btn btn-primary btn-sm"
+                >
+                  Enable
+                </button>
+                <button
+                  onClick={() => setShowNotificationBanner(false)}
+                  className="btn btn-secondary btn-sm"
+                >
+                  Dismiss
+                </button>
+                <button
+                  onClick={async () => {
+                    console.log('[DEBUG] Testing notification...')
+                    await testNotification()
+                    refreshNotificationStatus()
+                  }}
+                  className="btn btn-secondary btn-sm"
+                  style={{ fontSize: '0.7rem', padding: '4px 8px' }}
+                >
+                  Test
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Messages Area */}
         <div className="messages-area">
