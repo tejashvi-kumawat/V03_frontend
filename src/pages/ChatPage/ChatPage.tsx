@@ -12,6 +12,7 @@ import RCAProgress from '../../components/RCAProgress/RCAProgress'
 import RCAResult from '../../components/RCAResult/RCAResult'
 import { apiClient } from '../../services/apiClient'
 import { rcaService } from '../../services/rcaService'
+import { showSuccess, showError } from '../../utils/notifications'
 import { 
   Send, 
   Paperclip, 
@@ -1575,9 +1576,18 @@ const ChatPage: React.FC = () => {
           <div className="modal-content rca-modal" onClick={(e) => e.stopPropagation()}>
             <RCAResult
               result={rcaResult}
-              onExport={(format) => {
-                console.log('Export RCA result as:', format)
-                // TODO: Implement export functionality
+              onExport={async (format) => {
+                try {
+                  if (format === 'csv') {
+                    showError('CSV export not yet implemented')
+                    return
+                  }
+                  await rcaService.exportResult(rcaResult, format)
+                  showSuccess(`RCA result exported as ${format.toUpperCase()} successfully`)
+                } catch (error) {
+                  console.error('Failed to export RCA result:', error)
+                  showError(`Failed to export RCA result as ${format.toUpperCase()}: ${error}`)
+                }
               }}
               onShare={() => {
                 console.log('Share RCA result')

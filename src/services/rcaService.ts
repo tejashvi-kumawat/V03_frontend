@@ -456,6 +456,211 @@ class RCAService {
   }
 
   /**
+   * Export RCA result as JSON
+   */
+  exportAsJSON(result: any, filename?: string): void {
+    try {
+      const exportData = {
+        metadata: {
+          export_date: new Date().toISOString(),
+          export_format: 'json',
+          version: '1.0'
+        },
+        rca_result: {
+          id: result.id,
+          root_cause: result.root_cause,
+          confidence: result.confidence,
+          confidence_percentage: result.confidence_percentage,
+          findings: result.findings,
+          recommendations: result.recommendations,
+          hypotheses_tested: result.hypotheses_tested,
+          test_results: result.test_results,
+          report: result.report,
+          duration_minutes: result.duration_minutes,
+          created_at: result.created_at,
+          updated_at: result.updated_at
+        }
+      }
+
+      const jsonString = JSON.stringify(exportData, null, 2)
+      const blob = new Blob([jsonString], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      
+      const link = document.createElement('a')
+      link.href = url
+      link.download = filename || `rca-result-${result.id}-${new Date().toISOString().split('T')[0]}.json`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(url)
+    } catch (error) {
+      console.error('Failed to export RCA result as JSON:', error)
+      throw new Error('Failed to export RCA result as JSON')
+    }
+  }
+
+  /**
+   * Export RCA result as PDF
+   */
+  async exportAsPDF(result: any, filename?: string): Promise<void> {
+    try {
+      // Dynamic import to avoid bundling jsPDF in the main bundle
+      const { jsPDF } = await import('jspdf')
+      
+      const doc = new jsPDF()
+      const pageWidth = doc.internal.pageSize.getWidth()
+      const margin = 20
+      const contentWidth = pageWidth - (margin * 2)
+      let yPosition = margin
+
+      // Helper function to add text with word wrapping
+      const addWrappedText = (text: string, y: number, fontSize: number = 12) => {
+        doc.setFontSize(fontSize)
+        const lines = doc.splitTextToSize(text, contentWidth)
+        doc.text(lines, margin, y)
+        return y + (lines.length * fontSize * 0.4)
+      }
+
+      // Helper function to add section header
+      const addSectionHeader = (title: string, y: number) => {
+        doc.setFontSize(16)
+        doc.setFont(undefined, 'bold')
+        doc.text(title, margin, y)
+        doc.setFont(undefined, 'normal')
+        return y + 10
+      }
+
+      // Title
+      doc.setFontSize(20)
+      doc.setFont(undefined, 'bold')
+      doc.text('Root Cause Analysis Report', margin, yPosition)
+      yPosition += 15
+
+      // Metadata
+      doc.setFontSize(12)
+      doc.setFont(undefined, 'normal')
+      yPosition = addWrappedText(`Report ID: ${result.id || 'N/A'}`, yPosition, 10)
+      yPosition = addWrappedText(`Generated: ${new Date().toLocaleString()}`, yPosition, 10)
+      yPosition = addWrappedText(`Duration: ${result.duration_minutes?.toFixed(1) || 'N/A'} minutes`, yPosition, 10)
+      yPosition += 10
+
+      // Root Cause
+      yPosition = addSectionHeader('Root Cause', yPosition)
+      if (result.root_cause) {
+        yPosition = addWrappedText(result.root_cause, yPosition)
+        yPosition = addWrappedText(`Confidence: ${result.confidence_percentage || 'N/A'}`, yPosition, 10)
+      } else {
+        yPosition = addWrappedText('No definitive root cause identified', yPosition)
+      }
+      yPosition += 10
+
+      // Check if we need a new page
+      if (yPosition > 250) {
+        doc.addPage()
+        yPosition = margin
+      }
+
+      // Key Findings
+      if (result.findings && result.findings.length > 0) {
+        yPosition = addSectionHeader(`Key Findings (${result.findings.length})`, yPosition)
+        for (let i = 0; i < result.findings.length; i++) {
+          const finding = result.findings[i]
+          yPosition = addWrappedText(`${i + 1}. ${finding || 'No description'}`, yPosition, 10)
+          
+          // Check if we need a new page
+          if (yPosition > 250) {
+            doc.addPage()
+            yPosition = margin
+          }
+        }
+        yPosition += 5
+      }
+
+      // Check if we need a new page
+      if (yPosition > 250) {
+        doc.addPage()
+        yPosition = margin
+      }
+
+      // Recommendations
+      if (result.recommendations && result.recommendations.length > 0) {
+        yPosition = addSectionHeader(`Recommendations (${result.recommendations.length})`, yPosition)
+        for (let i = 0; i < result.recommendations.length; i++) {
+          const recommendation = result.recommendations[i]
+          yPosition = addWrappedText(`${i + 1}. ${recommendation || 'No description'}`, yPosition, 10)
+          
+          // Check if we need a new page
+          if (yPosition > 250) {
+            doc.addPage()
+            yPosition = margin
+          }
+        }
+        yPosition += 5
+      }
+
+      // Check if we need a new page
+      if (yPosition > 250) {
+        doc.addPage()
+        yPosition = margin
+      }
+
+      // Hypotheses Tested
+      if (result.hypotheses_tested && result.hypotheses_tested.length > 0) {
+        yPosition = addSectionHeader(`Hypotheses Tested (${result.hypotheses_tested.length})`, yPosition)
+        
+        for (let i = 0; i < result.hypotheses_tested.length; i++) {
+          const hypothesis = result.hypotheses_tested[i]
+          
+          // Check if we need a new page
+          if (yPosition > 220) {
+            doc.addPage()
+            yPosition = margin
+          }
+
+          doc.setFontSize(12)
+          doc.setFont(undefined, 'bold')
+          yPosition = addWrappedText(`Hypothesis ${i + 1}: ${hypothesis.text || 'No description'}`, yPosition, 12)
+          
+          doc.setFont(undefined, 'normal')
+          doc.setFontSize(10)
+          yPosition = addWrappedText(`Status: ${hypothesis.status || 'Unknown'}`, yPosition, 10)
+          yPosition = addWrappedText(`Confidence: ${((hypothesis.confidence || 0) * 100).toFixed(1)}%`, yPosition, 10)
+          
+          if (hypothesis.rationale) {
+            yPosition = addWrappedText(`Rationale: ${hypothesis.rationale}`, yPosition, 10)
+          }
+          
+          yPosition += 5
+        }
+      }
+
+      // Save the PDF
+      const finalFilename = filename || `rca-report-${result.id}-${new Date().toISOString().split('T')[0]}.pdf`
+      doc.save(finalFilename)
+      
+    } catch (error) {
+      console.error('Failed to export RCA result as PDF:', error)
+      throw new Error('Failed to export RCA result as PDF')
+    }
+  }
+
+  /**
+   * Export RCA result in specified format
+   */
+  async exportResult(result: any, format: 'pdf' | 'json', filename?: string): Promise<void> {
+    switch (format) {
+      case 'json':
+        this.exportAsJSON(result, filename)
+        break
+      case 'pdf':
+        await this.exportAsPDF(result, filename)
+        break
+      default:
+        throw new Error(`Unsupported export format: ${format}`)
+    }
+  }
+
+  /**
    * Poll for RCA investigation completion
    */
   async pollRCAInvestigation(requestId: string, onProgress?: (request: RCARequest) => void): Promise<RCARequest> {
