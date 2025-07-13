@@ -31,7 +31,7 @@ const RCAForm: React.FC<RCAFormProps> = ({
     data_sources: [],
     context_info: '',
     priority: 'medium',
-    client_id: 'demo',
+    client_id: 'client_demo',
     metadata: {}
   })
 

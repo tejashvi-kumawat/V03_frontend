@@ -1,504 +1,493 @@
-// RCA Service for AI Business Analytics & Intelligence Solution
+// RCA Service for Root Cause Analysis Management
 
 import { apiClient } from './apiClient'
-import {
-  RCARequest,
-  RCARequestCreate,
-  RCARequestUpdate,
-  RCASession,
-  RCAResult,
-  RCAHypothesis,
-  RCALog,
-  RCAStats,
-  RCADashboard,
-  RCAToolStatus,
-  RCAClientConfig,
-  RCAResponse,
-  RCAPagination,
-  RCAInvestigationState,
-  RCAProgressUpdate,
-  RCAError,
-  RCAErrorCode
-} from '../types/rca'
 
-const DEBUG = import.meta.env.VITE_DEBUG === 'true'
+const DEBUG = true // Set to true for debugging
+
+export interface RCARequest {
+  id: string
+  user: {
+    id: string
+    username: string
+    email: string
+  }
+  organization: string
+  client_id: string
+  problem_description: string
+  data_sources: string[]
+  context_info: string
+  priority: 'low' | 'medium' | 'high' | 'critical'
+  status: 'pending' | 'in_progress' | 'completed' | 'failed'
+  metadata: Record<string, any>
+  created_at: string
+  updated_at: string
+  started_at?: string
+  completed_at?: string
+  duration_minutes?: number
+}
+
+export interface RCAResult {
+  id: string
+  root_cause: string
+  confidence: number
+  confidence_percentage: string
+  findings: string[]
+  recommendations: string[]
+  hypotheses_tested: Array<{
+    id: string
+    text: string
+    rationale: string
+    confidence: number
+    status: 'active' | 'validated' | 'refuted' | 'inconclusive'
+    tests_planned: string[]
+    test_results: Array<{
+      test_name: string
+      tool: string
+      success: boolean
+      output: string
+      error: string
+      variables?: Record<string, any>
+      duration_ms: number
+    }>
+    evidence: string[]
+    created_at: string
+    updated_at: string
+  }>
+  test_results: Array<{
+    hypothesis_id: string
+    test_name: string
+    tool: string
+    status: string
+    result: string
+    error: string
+    duration_ms: number
+  }>
+  report: string
+  duration_minutes: number
+  created_at: string
+  updated_at: string
+}
+
+export interface RCASession {
+  id: string
+  session_id: string
+  phase: string
+  iteration_count: number
+  agent_config: Record<string, any>
+  client_config: Record<string, any>
+  current_hypotheses: any[]
+  tools_used: string[]
+  created_at: string
+  updated_at: string
+}
 
 class RCAService {
-  private baseUrl = '/rca'
-
-  // Request Management
-  async createRequest(requestData: RCARequestCreate): Promise<RCARequest> {
-    try {
-      if (DEBUG) {
-        console.log('[DEBUG] Creating RCA request:', requestData)
-      }
-
-      const response = await apiClient.post<any>(
-        `${this.baseUrl}/requests/`,
-        requestData
-      )
-
-      if (DEBUG) {
-        console.log('[DEBUG] createRequest response:', response)
-      }
-
-      if (!response.success) {
-        if (DEBUG) {
-          console.error('[DEBUG] createRequest backend error:', response.error)
-        }
-        throw new Error(response.error || 'Failed to create RCA request')
-      }
-
-      const requestObj = response.request || response.data
-      if (DEBUG) {
-        console.log('[DEBUG] RCA request created:', requestObj)
-      }
-
-      return requestObj!
-    } catch (error: any) {
-      if (DEBUG) {
-        console.error('[DEBUG] Error creating RCA request:', error)
-      }
-      // Surface backend error message if available
-      if (error?.response?.data?.error) {
-        throw new Error(error.response.data.error)
-      }
-      throw this.handleError(error, RCAErrorCode.REQUEST_CREATION_FAILED)
+  /**
+   * Get all RCA requests for the current user
+   */
+  async getRCARequests(page = 1, pageSize = 20, search = '', status = '', priority = ''): Promise<{
+    requests: RCARequest[]
+    pagination: {
+      page: number
+      page_size: number
+      total_count: number
+      total_pages: number
+      has_next: boolean
+      has_previous: boolean
     }
-  }
-
-  async getRequests(params?: {
-    page?: number
-    page_size?: number
-    search?: string
-    status?: string
-    priority?: string
-  }): Promise<{ requests: RCARequest[]; pagination: RCAPagination }> {
-    try {
-      const queryParams = new URLSearchParams()
-      if (params?.page) queryParams.append('page', params.page.toString())
-      if (params?.page_size) queryParams.append('page_size', params.page_size.toString())
-      if (params?.search) queryParams.append('search', params.search)
-      if (params?.status) queryParams.append('status', params.status)
-      if (params?.priority) queryParams.append('priority', params.priority)
-
-      const url = `${this.baseUrl}/requests/${queryParams.toString() ? `?${queryParams.toString()}` : ''}`
-      
-      const response = await apiClient.get<RCAResponse<{
-        requests: RCARequest[]
-        pagination: RCAPagination
-      }>>(url)
-
-      if (!response.success) {
-        throw new Error(response.error || 'Failed to fetch RCA requests')
-      }
-
-      return response.data!
-    } catch (error) {
-      if (DEBUG) {
-        console.error('[DEBUG] Error fetching RCA requests:', error)
-      }
-      throw this.handleError(error, RCAErrorCode.REQUEST_CREATION_FAILED)
-    }
-  }
-
-  async getRequest(requestId: string): Promise<RCARequest> {
-    try {
-      const response = await apiClient.get<RCAResponse<RCARequest>>(
-        `${this.baseUrl}/requests/${requestId}/`
-      )
-
-      if (!response.success) {
-        throw new Error(response.error || 'Failed to fetch RCA request')
-      }
-
-      return response.data!
-    } catch (error) {
-      if (DEBUG) {
-        console.error('[DEBUG] Error fetching RCA request:', error)
-      }
-      throw this.handleError(error, RCAErrorCode.REQUEST_CREATION_FAILED)
-    }
-  }
-
-  async updateRequest(requestId: string, updateData: RCARequestUpdate): Promise<RCARequest> {
-    try {
-      const response = await apiClient.put<RCAResponse<RCARequest>>(
-        `${this.baseUrl}/requests/${requestId}/`,
-        updateData
-      )
-
-      if (!response.success) {
-        throw new Error(response.error || 'Failed to update RCA request')
-      }
-
-      return response.data!
-    } catch (error) {
-      if (DEBUG) {
-        console.error('[DEBUG] Error updating RCA request:', error)
-      }
-      throw this.handleError(error, RCAErrorCode.REQUEST_CREATION_FAILED)
-    }
-  }
-
-  async deleteRequest(requestId: string): Promise<void> {
-    try {
-      const response = await apiClient.delete<RCAResponse<void>>(
-        `${this.baseUrl}/requests/${requestId}/`
-      )
-
-      if (!response.success) {
-        throw new Error(response.error || 'Failed to delete RCA request')
-      }
-    } catch (error) {
-      if (DEBUG) {
-        console.error('[DEBUG] Error deleting RCA request:', error)
-      }
-      throw this.handleError(error, RCAErrorCode.REQUEST_CREATION_FAILED)
-    }
-  }
-
-  // Investigation Control
-  async startInvestigation(requestId: string): Promise<RCARequest> {
-    try {
-      if (DEBUG) {
-        console.log('[DEBUG] Starting RCA investigation for request:', requestId)
-      }
-
-      const response = await apiClient.post<RCAResponse<RCARequest>>(
-        `${this.baseUrl}/requests/${requestId}/start/`
-      )
-
-      if (!response.success) {
-        throw new Error(response.error || 'Failed to start RCA investigation')
-      }
-
-      if (DEBUG) {
-        console.log('[DEBUG] RCA investigation started:', response.data)
-      }
-
-      return response.data!
-    } catch (error) {
-      if (DEBUG) {
-        console.error('[DEBUG] Error starting RCA investigation:', error)
-      }
-      throw this.handleError(error, RCAErrorCode.INVESTIGATION_START_FAILED)
-    }
-  }
-
-  async getSession(requestId: string): Promise<RCASession> {
-    try {
-      const response = await apiClient.get<RCAResponse<RCASession>>(
-        `${this.baseUrl}/requests/${requestId}/session/`
-      )
-
-      if (!response.success) {
-        throw new Error(response.error || 'Failed to fetch RCA session')
-      }
-
-      return response.data!
-    } catch (error) {
-      if (DEBUG) {
-        console.error('[DEBUG] Error fetching RCA session:', error)
-      }
-      throw this.handleError(error, RCAErrorCode.INVESTIGATION_FAILED)
-    }
-  }
-
-  async getResult(requestId: string): Promise<RCAResult> {
-    try {
-      const response = await apiClient.get<RCAResponse<RCAResult>>(
-        `${this.baseUrl}/requests/${requestId}/result/`
-      )
-
-      if (!response.success) {
-        throw new Error(response.error || 'Failed to fetch RCA result')
-      }
-
-      return response.data!
-    } catch (error) {
-      if (DEBUG) {
-        console.error('[DEBUG] Error fetching RCA result:', error)
-      }
-      throw this.handleError(error, RCAErrorCode.INVESTIGATION_FAILED)
-    }
-  }
-
-  // Session Details
-  async getSessionLogs(sessionId: string, params?: {
-    page?: number
-    page_size?: number
-    level?: string
-    step_type?: string
-  }): Promise<{ logs: RCALog[]; pagination: RCAPagination }> {
-    try {
-      const queryParams = new URLSearchParams()
-      if (params?.page) queryParams.append('page', params.page.toString())
-      if (params?.page_size) queryParams.append('page_size', params.page_size.toString())
-      if (params?.level) queryParams.append('level', params.level)
-      if (params?.step_type) queryParams.append('step_type', params.step_type)
-
-      const url = `${this.baseUrl}/sessions/${sessionId}/logs/${queryParams.toString() ? `?${queryParams.toString()}` : ''}`
-      
-      const response = await apiClient.get<RCAResponse<{
-        logs: RCALog[]
-        pagination: RCAPagination
-      }>>(url)
-
-      if (!response.success) {
-        throw new Error(response.error || 'Failed to fetch session logs')
-      }
-
-      return response.data!
-    } catch (error) {
-      if (DEBUG) {
-        console.error('[DEBUG] Error fetching session logs:', error)
-      }
-      throw this.handleError(error, RCAErrorCode.INVESTIGATION_FAILED)
-    }
-  }
-
-  async getSessionHypotheses(sessionId: string, params?: {
-    status?: string
-  }): Promise<RCAHypothesis[]> {
-    try {
-      const queryParams = new URLSearchParams()
-      if (params?.status) queryParams.append('status', params.status)
-
-      const url = `${this.baseUrl}/sessions/${sessionId}/hypotheses/${queryParams.toString() ? `?${queryParams.toString()}` : ''}`
-      
-      const response = await apiClient.get<RCAResponse<RCAHypothesis[]>>(url)
-
-      if (!response.success) {
-        throw new Error(response.error || 'Failed to fetch session hypotheses')
-      }
-
-      return response.data!
-    } catch (error) {
-      if (DEBUG) {
-        console.error('[DEBUG] Error fetching session hypotheses:', error)
-      }
-      throw this.handleError(error, RCAErrorCode.INVESTIGATION_FAILED)
-    }
-  }
-
-  // Analytics and Dashboard
-  async getStats(): Promise<RCAStats> {
-    try {
-      const response = await apiClient.get<RCAResponse<RCAStats>>(
-        `${this.baseUrl}/stats/`
-      )
-
-      if (!response.success) {
-        throw new Error(response.error || 'Failed to fetch RCA stats')
-      }
-
-      return response.data!
-    } catch (error) {
-      if (DEBUG) {
-        console.error('[DEBUG] Error fetching RCA stats:', error)
-      }
-      throw this.handleError(error, RCAErrorCode.INVESTIGATION_FAILED)
-    }
-  }
-
-  async getDashboard(): Promise<RCADashboard> {
-    try {
-      const response = await apiClient.get<RCAResponse<RCADashboard>>(
-        `${this.baseUrl}/dashboard/`
-      )
-
-      if (!response.success) {
-        throw new Error(response.error || 'Failed to fetch RCA dashboard')
-      }
-
-      return response.data!
-    } catch (error) {
-      if (DEBUG) {
-        console.error('[DEBUG] Error fetching RCA dashboard:', error)
-      }
-      throw this.handleError(error, RCAErrorCode.INVESTIGATION_FAILED)
-    }
-  }
-
-  // Configuration
-  async getToolsStatus(): Promise<{
-    tools: RCAToolStatus[]
-    service_available: boolean
   }> {
     try {
-      const response = await apiClient.get<RCAResponse<{
-        tools: RCAToolStatus[]
-        service_available: boolean
-      }>>(`${this.baseUrl}/tools/`)
-
-      if (!response.success) {
-        throw new Error(response.error || 'Failed to fetch tools status')
+      if (DEBUG) {
+        console.log('[DEBUG] RCAService.getRCARequests - fetching requests')
       }
 
-      return response.data!
+      const params: Record<string, any> = { page, page_size: pageSize }
+      if (search) params.search = search
+      if (status) params.status = status
+      if (priority) params.priority = priority
+
+      const response = await apiClient.get('/rca/requests/', { params })
+      
+      if (DEBUG) {
+        console.log('[DEBUG] RCAService.getRCARequests - response:', response)
+      }
+
+      if (response.success && response.data) {
+        return {
+          requests: response.data.requests,
+          pagination: response.data.pagination
+        }
+      }
+
+      return { requests: [], pagination: { page: 1, page_size: 20, total_count: 0, total_pages: 0, has_next: false, has_previous: false } }
     } catch (error) {
       if (DEBUG) {
-        console.error('[DEBUG] Error fetching tools status:', error)
+        console.error('[DEBUG] RCAService.getRCARequests - failed:', error)
       }
-      throw this.handleError(error, RCAErrorCode.SERVICE_UNAVAILABLE)
+      throw error
     }
   }
 
-  async getClientConfigs(): Promise<RCAClientConfig[]> {
+  /**
+   * Create a new RCA request
+   */
+  async createRCARequest(data: {
+    client_id: string
+    problem_description: string
+    data_sources?: string[]
+    context_info?: string
+    priority?: 'low' | 'medium' | 'high' | 'critical'
+    metadata?: Record<string, any>
+  }): Promise<RCARequest> {
     try {
-      const response = await apiClient.get<any>(
-        `${this.baseUrl}/configs/`
-      )
       if (DEBUG) {
-        console.log('[DEBUG] getClientConfigs response:', response)
+        console.log('[DEBUG] RCAService.createRCARequest - creating request:', data)
       }
-      if (!response.success) {
-        throw new Error(response.error || 'Failed to fetch client configs')
+
+      const response = await apiClient.post('/rca/requests/', data)
+      
+      if (DEBUG) {
+        console.log('[DEBUG] RCAService.createRCARequest - response:', response)
       }
-      // Use response.configurations if present, else fallback to response.data
-      return response.configurations || response.data || []
+
+      if (response.success && response.data) {
+        return response.data
+      }
+
+      throw new Error('Failed to create RCA request')
     } catch (error) {
       if (DEBUG) {
-        console.error('[DEBUG] Error fetching client configs:', error)
+        console.error('[DEBUG] RCAService.createRCARequest - failed:', error)
       }
-      throw this.handleError(error, RCAErrorCode.SERVICE_UNAVAILABLE)
+      throw error
     }
   }
 
-  // Utility Methods
-  async checkServiceAvailability(): Promise<boolean> {
+  /**
+   * Get a specific RCA request
+   */
+  async getRCARequest(requestId: string): Promise<RCARequest> {
     try {
-      const response = await this.getToolsStatus()
-      return response.service_available
+      if (DEBUG) {
+        console.log('[DEBUG] RCAService.getRCARequest - fetching request:', requestId)
+      }
+
+      const response = await apiClient.get(`/rca/requests/${requestId}/`)
+      
+      if (DEBUG) {
+        console.log('[DEBUG] RCAService.getRCARequest - response:', response)
+      }
+
+      if (response.success && response.data) {
+        return response.data
+      }
+
+      throw new Error('Failed to get RCA request')
     } catch (error) {
       if (DEBUG) {
-        console.log('[DEBUG] RCA service not available:', error)
+        console.error('[DEBUG] RCAService.getRCARequest - failed:', error)
       }
-      return false
+      throw error
     }
   }
 
-  async pollInvestigationProgress(requestId: string, onProgress?: (progress: RCAProgressUpdate) => void): Promise<RCAResult> {
+  /**
+   * Start an RCA investigation
+   */
+  async startRCAInvestigation(requestId: string): Promise<RCARequest> {
+    try {
+      if (DEBUG) {
+        console.log('[DEBUG] RCAService.startRCAInvestigation - starting investigation:', requestId)
+      }
+
+      const response = await apiClient.post(`/rca/requests/${requestId}/start/`)
+      
+      if (DEBUG) {
+        console.log('[DEBUG] RCAService.startRCAInvestigation - response:', response)
+      }
+
+      if (response.success && response.data) {
+        return response.data
+      }
+
+      throw new Error('Failed to start RCA investigation')
+    } catch (error) {
+      if (DEBUG) {
+        console.error('[DEBUG] RCAService.startRCAInvestigation - failed:', error)
+      }
+      throw error
+    }
+  }
+
+  /**
+   * Get RCA result for a request
+   */
+  async getRCAResult(requestId: string): Promise<RCAResult> {
+    try {
+      if (DEBUG) {
+        console.log('[DEBUG] RCAService.getRCAResult - fetching result:', requestId)
+      }
+
+      const response = await apiClient.get(`/rca/requests/${requestId}/result/`)
+      
+      if (DEBUG) {
+        console.log('[DEBUG] RCAService.getRCAResult - response:', response)
+      }
+
+      if (response.success && response.data) {
+        return response.data
+      }
+
+      throw new Error('Failed to get RCA result')
+    } catch (error) {
+      if (DEBUG) {
+        console.error('[DEBUG] RCAService.getRCAResult - failed:', error)
+      }
+      throw error
+    }
+  }
+
+  /**
+   * Get RCA session for a request
+   */
+  async getRCASession(requestId: string): Promise<RCASession> {
+    try {
+      if (DEBUG) {
+        console.log('[DEBUG] RCAService.getRCASession - fetching session:', requestId)
+      }
+
+      const response = await apiClient.get(`/rca/requests/${requestId}/session/`)
+      
+      if (DEBUG) {
+        console.log('[DEBUG] RCAService.getRCASession - response:', response)
+      }
+
+      if (response.success && response.data) {
+        return response.data
+      }
+
+      throw new Error('Failed to get RCA session')
+    } catch (error) {
+      if (DEBUG) {
+        console.error('[DEBUG] RCAService.getRCASession - failed:', error)
+      }
+      throw error
+    }
+  }
+
+  /**
+   * Get available client configurations
+   */
+  async getClientConfigs(): Promise<Array<{
+    client_id: string
+    name: string
+    description: string
+    steps: number
+    available: boolean
+  }>> {
+    try {
+      if (DEBUG) {
+        console.log('[DEBUG] RCAService.getClientConfigs - fetching client configurations')
+        console.log('[DEBUG] RCAService.getClientConfigs - API_BASE_URL:', (import.meta as any).env?.VITE_API_BASE_URL || '/api')
+        console.log('[DEBUG] RCAService.getClientConfigs - isAuthenticated:', apiClient.isAuthenticated())
+        console.log('[DEBUG] RCAService.getClientConfigs - authTokens:', apiClient.getAuthTokens())
+      }
+
+      const response = await apiClient.get('/rca/configs/')
+      
+      if (DEBUG) {
+        console.log('[DEBUG] RCAService.getClientConfigs - response:', response)
+      }
+
+      if (response.success && response.configurations) {
+        return response.configurations
+      }
+
+      return []
+    } catch (error) {
+      if (DEBUG) {
+        console.error('[DEBUG] RCAService.getClientConfigs - failed:', error)
+        console.error('[DEBUG] RCAService.getClientConfigs - error response:', (error as any).response?.data)
+        console.error('[DEBUG] RCAService.getClientConfigs - error status:', (error as any).response?.status)
+      }
+      throw error
+    }
+  }
+
+  /**
+   * Get RCA statistics
+   */
+  async getRCAStats(): Promise<any> {
+    try {
+      if (DEBUG) {
+        console.log('[DEBUG] RCAService.getRCAStats - fetching stats')
+      }
+
+      const response = await apiClient.get('/rca/stats/')
+      
+      if (DEBUG) {
+        console.log('[DEBUG] RCAService.getRCAStats - response:', response)
+      }
+
+      if (response.success && response.data) {
+        return response.data
+      }
+
+      throw new Error('Failed to get RCA stats')
+    } catch (error) {
+      if (DEBUG) {
+        console.error('[DEBUG] RCAService.getRCAStats - failed:', error)
+      }
+      throw error
+    }
+  }
+
+  /**
+   * Get RCA dashboard data
+   */
+  async getRCADashboard(): Promise<any> {
+    try {
+      if (DEBUG) {
+        console.log('[DEBUG] RCAService.getRCADashboard - fetching dashboard data')
+      }
+
+      const response = await apiClient.get('/rca/dashboard/')
+      
+      if (DEBUG) {
+        console.log('[DEBUG] RCAService.getRCADashboard - response:', response)
+      }
+
+      if (response.success && response.data) {
+        return response.data
+      }
+
+      throw new Error('Failed to get RCA dashboard data')
+    } catch (error) {
+      if (DEBUG) {
+        console.error('[DEBUG] RCAService.getRCADashboard - failed:', error)
+      }
+      throw error
+    }
+  }
+
+  /**
+   * Format confidence value as percentage
+   */
+  formatConfidence(confidence: number | null): string {
+    if (confidence === null || confidence === undefined) {
+      return 'N/A'
+    }
+    return `${(confidence * 100).toFixed(1)}%`
+  }
+
+  /**
+   * Format RCA result for chat display
+   */
+  formatRCAResultForChat(result: RCAResult): string {
+    const parts: string[] = []
+    
+    // Header
+    parts.push('🔍 **Root Cause Analysis Complete**')
+    parts.push('')
+    
+    // Root cause
+    if (result.root_cause) {
+      parts.push(`**Root Cause**: ${result.root_cause}`)
+      parts.push(`**Confidence**: ${result.confidence_percentage}`)
+    } else {
+      parts.push('**Root Cause**: No definitive root cause identified')
+    }
+    
+    parts.push('')
+    
+    // Key findings
+    if (result.findings.length > 0) {
+      parts.push('**Key Findings**:')
+      for (const finding of result.findings.slice(0, 3)) {
+        parts.push(`• ${finding}`)
+      }
+      if (result.findings.length > 3) {
+        parts.push(`• ... and ${result.findings.length - 3} more findings`)
+      }
+      parts.push('')
+    }
+    
+    // Recommendations
+    if (result.recommendations.length > 0) {
+      parts.push('**Top Recommendations**:')
+      for (let i = 0; i < Math.min(3, result.recommendations.length); i++) {
+        const rec = result.recommendations[i].replace('Action: ', '').replace(' -', '').trim()
+        parts.push(`${i + 1}. ${rec}`)
+      }
+      if (result.recommendations.length > 3) {
+        parts.push(`... and ${result.recommendations.length - 3} more recommendations`)
+      }
+      parts.push('')
+    }
+    
+    // Hypothesis summary
+    if (result.hypotheses_tested.length > 0) {
+      const validatedCount = result.hypotheses_tested.filter(h => h.status === 'validated').length
+      const refutedCount = result.hypotheses_tested.filter(h => h.status === 'refuted').length
+      const totalCount = result.hypotheses_tested.length
+      
+      parts.push('**Investigation Summary**:')
+      parts.push(`• ${totalCount} hypotheses tested`)
+      parts.push(`• ${validatedCount} validated`)
+      parts.push(`• ${refutedCount} refuted`)
+      parts.push('')
+    }
+    
+    // Duration
+    if (result.duration_minutes) {
+      parts.push(`**Investigation Duration**: ${result.duration_minutes.toFixed(1)} minutes`)
+      parts.push('')
+    }
+    
+    // Call to action
+    parts.push('💡 **Next Steps**:')
+    parts.push('• Review the detailed report for complete analysis')
+    parts.push('• Implement the recommended actions')
+    parts.push('• Monitor for similar issues in the future')
+    parts.push('')
+    parts.push('📊 *Full report available in the RCA dashboard*')
+    
+    return parts.join('\n')
+  }
+
+  /**
+   * Poll for RCA investigation completion
+   */
+  async pollRCAInvestigation(requestId: string, onProgress?: (request: RCARequest) => void): Promise<RCARequest> {
     const maxAttempts = 60 // 5 minutes with 5-second intervals
     let attempts = 0
-
+    
     while (attempts < maxAttempts) {
       try {
-        const request = await this.getRequest(requestId)
+        const request = await this.getRCARequest(requestId)
         
-        if (request.status === 'completed') {
-          const result = await this.getResult(requestId)
-          return result
-        } else if (request.status === 'failed') {
-          throw new Error('RCA investigation failed')
+        if (onProgress) {
+          onProgress(request)
         }
-
-        // Get session for progress details
-        try {
-          const session = await this.getSession(requestId)
-          if (onProgress && session) {
-            const progress: RCAProgressUpdate = {
-              request_id: requestId,
-              session_id: session.session_id,
-              phase: session.phase,
-              iteration: session.iteration_count,
-              total_iterations: 10, // Default, could be configurable
-              tools_used: session.tools_used,
-              progress_percentage: Math.min((session.iteration_count / 10) * 100, 95),
-              status_message: `Phase: ${session.phase}, Iteration: ${session.iteration_count}`
-            }
-            onProgress(progress)
-          }
-        } catch (sessionError) {
-          // Session might not be available yet, continue polling
-          if (DEBUG) {
-            console.log('[DEBUG] Session not available yet, continuing to poll')
-          }
+        
+        if (request.status === 'completed' || request.status === 'failed') {
+          return request
         }
-
+        
         // Wait 5 seconds before next poll
         await new Promise(resolve => setTimeout(resolve, 5000))
         attempts++
+        
       } catch (error) {
         if (DEBUG) {
-          console.error('[DEBUG] Error polling investigation progress:', error)
+          console.error('[DEBUG] RCAService.pollRCAInvestigation - poll failed:', error)
         }
-        throw this.handleError(error, RCAErrorCode.INVESTIGATION_FAILED)
+        attempts++
       }
     }
-
-    throw new Error('Investigation timeout - took longer than expected')
-  }
-
-  // Error Handling
-  private handleError(error: any, defaultCode: RCAErrorCode): RCAError {
-    let errorCode = defaultCode
-    let message = 'An unexpected error occurred'
-    let details = null
-
-    if (error.response?.data?.error_code) {
-      errorCode = error.response.data.error_code as RCAErrorCode
-    }
-
-    if (error.response?.data?.error) {
-      message = error.response.data.error
-    } else if (error.message) {
-      message = error.message
-    }
-
-    if (error.response?.data?.details) {
-      details = error.response.data.details
-    }
-
-    return {
-      code: errorCode,
-      message,
-      details,
-      timestamp: new Date().toISOString(),
-      recoverable: errorCode !== RCAErrorCode.PERMISSION_DENIED
-    }
-  }
-
-  // Helper Methods
-  getPriorityColor(priority: string): string {
-    switch (priority) {
-      case 'critical': return '#dc2626'
-      case 'high': return '#ea580c'
-      case 'medium': return '#d97706'
-      case 'low': return '#059669'
-      default: return '#6b7280'
-    }
-  }
-
-  getStatusColor(status: string): string {
-    switch (status) {
-      case 'completed': return '#059669'
-      case 'in_progress': return '#d97706'
-      case 'failed': return '#dc2626'
-      case 'cancelled': return '#6b7280'
-      case 'pending': return '#3b82f6'
-      default: return '#6b7280'
-    }
-  }
-
-  formatDuration(minutes: number | null): string {
-    if (!minutes) return 'N/A'
     
-    const hours = Math.floor(minutes / 60)
-    const mins = Math.floor(minutes % 60)
-    
-    if (hours > 0) {
-      return `${hours}h ${mins}m`
-    }
-    return `${mins}m`
-  }
-
-  formatConfidence(confidence: number | null): string {
-    if (confidence === null) return 'N/A'
-    return `${Math.round(confidence * 100)}%`
+    throw new Error('RCA investigation polling timeout')
   }
 }
 
-// Export singleton instance
 export const rcaService = new RCAService() 

@@ -2,11 +2,11 @@
 
 import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse, AxiosError } from 'axios'
 
-const DEBUG = import.meta.env.VITE_DEBUG === 'true'
+const DEBUG = (import.meta as any).env?.VITE_DEBUG === 'true'
 
 // API Configuration
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api'
-const REQUEST_TIMEOUT = 30000 // 30 seconds
+const API_BASE_URL = (import.meta as any).env?.VITE_API_BASE_URL || '/api'
+const REQUEST_TIMEOUT = 12000000 // 2 minutes for long-running operations like RCA
 
 interface ApiResponse<T = any> {
   data: T

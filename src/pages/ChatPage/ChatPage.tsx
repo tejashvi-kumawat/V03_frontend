@@ -339,36 +339,71 @@ const ChatPage: React.FC = () => {
       setRcaInvestigationState(RCAInvestigationState.CREATING_REQUEST)
       setRcaError(null)
 
+      // Add user message to conversation
+      if (currentConversation) {
+        await sendMessage(`🔍 **RCA Investigation Started**\n\n**Problem Description:**\n${problemDescription}`, [])
+      }
+
       // Create RCA request
       const requestData: RCAFormData = {
         problem_description: problemDescription,
         data_sources: ['demo_data'],
         context_info: '',
         priority: 'medium',
-        client_id: 'demo',
+        client_id: 'client_demo', // Use correct client_id
         metadata: {}
       }
 
-      const request = await rcaService.createRequest(requestData)
+      const request = await rcaService.createRCARequest(requestData)
       setRcaRequest(request)
+
+      // Add investigation start message
+      if (currentConversation) {
+        await sendMessage(`🚀 **Investigation Created**\n\n**Request ID:** ${request.id}\n**Status:** ${request.status}\n**Priority:** ${request.priority}`, [])
+      }
 
       // Start investigation
       setRcaInvestigationState(RCAInvestigationState.STARTING_INVESTIGATION)
-      const startedRequest = await rcaService.startInvestigation(request.id)
+      const startedRequest = await rcaService.startRCAInvestigation(request.id)
       setRcaRequest(startedRequest)
+
+      // Add investigation progress message
+      if (currentConversation) {
+        await sendMessage(`⚡ **Investigation In Progress**\n\nAnalyzing problem and generating hypotheses...`, [])
+      }
 
       // Poll for progress
       setRcaInvestigationState(RCAInvestigationState.INVESTIGATING)
-      const result = await rcaService.pollInvestigationProgress(
+      const completedRequest = await rcaService.pollRCAInvestigation(
         request.id,
-        (progress) => {
+        (requestProgress) => {
+          // Convert RCARequest to RCAProgressUpdate
+          const progress: RCAProgressUpdate = {
+            request_id: requestProgress.id,
+            session_id: '', // Will be populated when session is available
+            phase: 'investigating',
+            iteration: 0,
+            total_iterations: 10,
+            tools_used: [],
+            progress_percentage: requestProgress.status === 'completed' ? 100 : 
+                                requestProgress.status === 'in_progress' ? 50 : 0,
+            status_message: `Status: ${requestProgress.status}`
+          }
           setRcaProgress(progress)
         }
       )
 
-      setRcaResult(result)
+      // Get the final result
+      const result = await rcaService.getRCAResult(request.id)
+      setRcaResult(result as any)
       setRcaInvestigationState(RCAInvestigationState.COMPLETED)
       setRcaProgress(null)
+
+      // Add investigation results to conversation
+      if (currentConversation) {
+        const resultMessage = formatRCAResultForChat(result)
+        await sendMessage(resultMessage, [])
+      }
 
       if (DEBUG) {
         console.log('[DEBUG] RCA investigation completed:', result)
@@ -377,6 +412,12 @@ const ChatPage: React.FC = () => {
       console.error('[DEBUG] RCA investigation failed:', error)
       setRcaError(error instanceof Error ? error.message : 'RCA investigation failed')
       setRcaInvestigationState(RCAInvestigationState.FAILED)
+      
+      // Add error message to conversation
+      if (currentConversation) {
+        const errorMessage = `❌ **RCA Investigation Failed**\n\n**Error:** ${error instanceof Error ? error.message : 'Unknown error'}\n\nPlease try again or contact support.`
+        await sendMessage(errorMessage, [])
+      }
     }
   }
 
@@ -386,7 +427,12 @@ const ChatPage: React.FC = () => {
       setRcaError(null)
       setShowRcaForm(false)
 
-      const request = await rcaService.createRequest(formData)
+      // Add user message to conversation
+      if (currentConversation) {
+        await sendMessage(`🔍 **RCA Investigation Request**\n\n**Problem:** ${formData.problem_description}\n**Client:** ${formData.client_id}\n**Priority:** ${formData.priority}`, [])
+      }
+
+      const request = await rcaService.createRCARequest(formData)
       if (!request || !request.id) {
         console.error('[DEBUG] RCA createRequest returned invalid response:', request)
         setRcaError('Failed to create RCA request. Please try again.')
@@ -395,29 +441,59 @@ const ChatPage: React.FC = () => {
       }
       setRcaRequest(request)
 
+      // Add investigation start message
+      if (currentConversation) {
+        await sendMessage(`🚀 **Investigation Created**\n\n**Request ID:** ${request.id}\n**Status:** ${request.status}\n**Priority:** ${request.priority}`, [])
+      }
+
       // Start investigation
       setRcaInvestigationState(RCAInvestigationState.STARTING_INVESTIGATION)
-      const startedRequest = await rcaService.startInvestigation(request.id)
+      const startedRequest = await rcaService.startRCAInvestigation(request.id)
       if (!startedRequest || !startedRequest.id) {
-        console.error('[DEBUG] RCA startInvestigation returned invalid response:', startedRequest)
+        console.error('[DEBUG] RCA startRCAInvestigation returned invalid response:', startedRequest)
         setRcaError('Failed to start RCA investigation. Please try again.')
         setRcaInvestigationState(RCAInvestigationState.FAILED)
         return
       }
       setRcaRequest(startedRequest)
 
+      // Add investigation progress message
+      if (currentConversation) {
+        await sendMessage(`⚡ **Investigation In Progress**\n\nAnalyzing problem and generating hypotheses...`, [])
+      }
+
       // Poll for progress
       setRcaInvestigationState(RCAInvestigationState.INVESTIGATING)
-      const result = await rcaService.pollInvestigationProgress(
+      const completedRequest = await rcaService.pollRCAInvestigation(
         request.id,
-        (progress) => {
+        (requestProgress) => {
+          // Convert RCARequest to RCAProgressUpdate
+          const progress: RCAProgressUpdate = {
+            request_id: requestProgress.id,
+            session_id: '', // Will be populated when session is available
+            phase: 'investigating',
+            iteration: 0,
+            total_iterations: 10,
+            tools_used: [],
+            progress_percentage: requestProgress.status === 'completed' ? 100 : 
+                                requestProgress.status === 'in_progress' ? 50 : 0,
+            status_message: `Status: ${requestProgress.status}`
+          }
           setRcaProgress(progress)
         }
       )
 
-      setRcaResult(result)
+      // Get the final result
+      const result = await rcaService.getRCAResult(request.id)
+      setRcaResult(result as any)
       setRcaInvestigationState(RCAInvestigationState.COMPLETED)
       setRcaProgress(null)
+
+      // Add investigation results to conversation
+      if (currentConversation) {
+        const resultMessage = formatRCAResultForChat(result)
+        await sendMessage(resultMessage, [])
+      }
 
       if (DEBUG) {
         console.log('[DEBUG] RCA investigation completed:', result)
@@ -426,7 +502,49 @@ const ChatPage: React.FC = () => {
       console.error('[DEBUG] RCA investigation failed:', error)
       setRcaError(error instanceof Error ? error.message : 'RCA investigation failed')
       setRcaInvestigationState(RCAInvestigationState.FAILED)
+      
+      // Add error message to conversation
+      if (currentConversation) {
+        const errorMessage = `❌ **RCA Investigation Failed**\n\n**Error:** ${error instanceof Error ? error.message : 'Unknown error'}\n\nPlease try again or contact support.`
+        await sendMessage(errorMessage, [])
+      }
     }
+  }
+
+  const formatRCAResultForChat = (result: any): string => {
+    let message = `🎯 **RCA Investigation Complete**\n\n`
+    
+    if (result.root_cause) {
+      message += `**🔍 Root Cause:**\n${result.root_cause}\n\n`
+    }
+    
+    if (result.confidence !== null && result.confidence !== undefined) {
+      message += `**📊 Confidence:** ${Math.round(result.confidence * 100)}%\n\n`
+    }
+    
+    if (result.findings && result.findings.length > 0) {
+      message += `**📋 Key Findings:**\n`
+      result.findings.forEach((finding, index) => {
+        message += `${index + 1}. ${finding}\n`
+      })
+      message += `\n`
+    }
+    
+    if (result.recommendations && result.recommendations.length > 0) {
+      message += `**💡 Recommendations:**\n`
+      result.recommendations.forEach((rec, index) => {
+        message += `${index + 1}. ${rec}\n`
+      })
+      message += `\n`
+    }
+    
+    if (result.duration_minutes) {
+      message += `**⏱️ Duration:** ${Math.round(result.duration_minutes)} minutes\n\n`
+    }
+    
+    message += `**📈 Status:** ${result.status || 'completed'}`
+    
+    return message
   }
 
   const handleRCACancel = () => {
@@ -465,7 +583,7 @@ const ChatPage: React.FC = () => {
         await startRCAInvestigation(messageText)
       } else {
         // Normal chat message
-        await sendMessage(messageText, selectedFiles)
+      await sendMessage(messageText, selectedFiles)
       }
 
       setMessageText('')
